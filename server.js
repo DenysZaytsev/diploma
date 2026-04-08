@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/db');
+const fs = require('fs');
 
 // Connect to database
 connectDB();
@@ -9,6 +10,12 @@ connectDB();
 const app = express();
 
 const path = require('path');
+
+// Автоматичне створення папки uploads, якщо її не існує
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 // Middleware
 app.use(cors());
