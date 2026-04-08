@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini-EDMS | Деталі документа</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-900 text-white flex flex-col">
+        <div class="h-16 flex items-center justify-center border-b border-slate-800">
+            <h1 class="text-xl font-bold tracking-wider">Mini-EDMS</h1>
+        </div>
+        <nav class="flex-1 px-4 py-6 space-y-2">
+            <a href="/pages/dashboard.html" class="block px-4 py-2 hover:bg-slate-800 rounded-md transition-colors">
+                Дашборд
+            </a>
+            <a href="/pages/registry.html" class="block px-4 py-2 hover:bg-slate-800 rounded-md transition-colors">
+                Журнал документів
+            </a>
+            <a href="/pages/new-document.html" class="block px-4 py-2 hover:bg-slate-800 rounded-md transition-colors" id="navNewDoc">
+                Новий документ
+            </a>
+        </nav>
+        <div class="p-4 border-t border-slate-800">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-sm font-bold" id="userInitials">-</div>
+                <div>
+                    <p class="text-sm font-medium" id="userName">User Name</p>
+                    <p class="text-xs text-slate-400 capitalize" id="userRole">Role</p>
+                </div>
+            </div>
+            <button onclick="window.API.logout()" class="w-full py-2 px-4 border border-slate-700 rounded-md text-sm hover:bg-slate-800 transition-colors">
+                Вийти
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-16 bg-white shadow-sm flex items-center px-8 border-b border-gray-200">
+            <button onclick="window.history.back()" class="text-gray-500 hover:text-gray-700 mr-4">
+                &larr; Назад
+            </button>
+            <h2 class="text-xl font-semibold text-gray-800" id="headerDocTitle">Завантаження...</h2>
+        </header>
+
+        <div class="flex-1 overflow-auto p-8">
+            <div id="loadingIndicator" class="text-center text-gray-500 py-10">Завантаження деталей документа...</div>
+            <div id="errorIndicator" class="hidden text-center text-red-500 py-10"></div>
+            
+            <div id="docContent" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left Column: Details & Actions -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Action Bar (Dynamic) -->
+                    <div id="actionBar" class="bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-wrap gap-3 items-center justify-between">
+                        <div class="text-sm text-gray-600">Доступні дії:</div>
+                        <div id="actionButtons" class="flex gap-2">
+                            <!-- Buttons injected by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Main Info Card -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <div class="flex justify-between items-start mb-6">
+                            <div>
+                                <h3 class="text-2xl font-bold text-gray-900" id="docRegNumber">ВХ-2026-000</h3>
+                                <p class="text-lg text-gray-700 mt-1" id="docTitle">Тема документа</p>
+                            </div>
+                            <span id="docStatusBadge" class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                Статус
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                            <div>
+                                <span class="block text-gray-500 mb-1">Тип документа</span>
+                                <span class="font-medium text-gray-900" id="docType">Тип</span>
+                            </div>
+                            <div>
+                                <span class="block text-gray-500 mb-1">Кореспондент / Контрагент</span>
+                                <span class="font-medium text-gray-900" id="docCorrespondent">-</span>
+                            </div>
+                            <div>
+                                <span class="block text-gray-500 mb-1">Дата реєстрації</span>
+                                <span class="font-medium text-gray-900" id="docDate">-</span>
+                            </div>
+                            <div>
+                                <span class="block text-gray-500 mb-1">Зареєстрував</span>
+                                <span class="font-medium text-gray-900" id="docRegistrar">-</span>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 pt-6 border-t border-gray-100">
+                            <span class="block text-gray-500 mb-2 text-sm">Детальний опис</span>
+                            <p class="text-gray-800 whitespace-pre-line" id="docDescription">Опис відсутній.</p>
+                        </div>
+                        
+                        <div class="mt-6 pt-6 border-t border-gray-100" id="fileSection">
+                            <span class="block text-gray-500 mb-2 text-sm">Прикріплений файл</span>
+                            <div class="flex space-x-3 mb-4">
+                                <a href="#" target="_blank" id="docFileLink" class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                                    👁️ Відкрити в новій вкладці
+                                </a>
+                                <a href="#" download id="docFileDownload" class="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                    ⬇️ Завантажити файл
+                                </a>
+                            </div>
+                            <div id="fileViewerContainer" class="border border-gray-200 rounded-md overflow-hidden bg-gray-50 flex items-center justify-center min-h-[300px] h-[500px]">
+                                <!-- Viewer embedded via JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Audit Trail & Workflow -->
+                <div class="space-y-6">
+                    <!-- Workflow Info -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">Виконання</h4>
+                        <div class="space-y-4 text-sm">
+                            <div>
+                                <span class="block text-gray-500 mb-1">Призначений керівник</span>
+                                <span class="font-medium text-gray-900" id="docManager">Не призначено</span>
+                            </div>
+                            <div>
+                                <span class="block text-gray-500 mb-1">Виконавець</span>
+                                <span class="font-medium text-gray-900" id="docExecutor">Не призначено</span>
+                            </div>
+                            <div>
+                                <span class="block text-gray-500 mb-1">Дедлайн</span>
+                                <span class="font-medium" id="docDeadline">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Audit Trail -->
+                    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                        <h4 class="text-lg font-semibold text-gray-800 mb-4">Журнал подій (Audit Trail)</h4>
+                        <div class="flow-root">
+                            <ul role="list" class="-mb-8" id="auditTrailList">
+                                <!-- Audit Items injected by JS -->
+                                <li class="text-sm text-gray-500 pb-8 text-center">Завантаження історії...</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Delegate Modal -->
+    <div id="delegateModal" class="hidden fixed z-10 inset-0 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onclick="closeDelegateModal()"></div>
+            <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <form id="delegateForm">
+                    <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                        <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">
+                            Делегувати документ
+                        </h3>
+                        <div class="mt-4 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Оберіть виконавця *</label>
+                                <select id="executorSelect" required class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border">
+                                    <option value="">Завантаження...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Дедлайн (Термін виконання) *</label>
+                                <input type="date" id="deadlineInput" required class="mt-1 block w-full pl-3 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                        <button type="submit" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm" id="modalSubmitBtn">
+                            Призначити
+                        </button>
+                        <button type="button" onclick="closeDelegateModal()" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+                            Скасувати
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/document.js"></script>
+</body>
+</html>

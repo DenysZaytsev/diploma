@@ -1,0 +1,28 @@
+{
+  "name": "diploma",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev:backend": "nodemon server.js",
+    "dev:frontend": "npx serve public -p 3000",
+    "dev": "npm run dev:backend & npm run dev:frontend"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.4.1",
+    "multer": "^2.1.1",
+    "serve": "^14.2.6"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}

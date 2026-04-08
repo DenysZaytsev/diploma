@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini-EDMS | Новий документ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-900 text-white flex flex-col">
+        <div class="h-16 flex items-center justify-center border-b border-slate-800">
+            <h1 class="text-xl font-bold tracking-wider">Mini-EDMS</h1>
+        </div>
+        <nav class="flex-1 px-4 py-6 space-y-2">
+            <a href="/pages/dashboard.html" class="block px-4 py-2 hover:bg-slate-800 rounded-md transition-colors">
+                Дашборд
+            </a>
+            <a href="/pages/registry.html" class="block px-4 py-2 hover:bg-slate-800 rounded-md transition-colors">
+                Журнал документів
+            </a>
+            <a href="/pages/new-document.html" class="block px-4 py-2 bg-blue-600 rounded-md transition-colors" id="navNewDoc">
+                Новий документ
+            </a>
+        </nav>
+        <div class="p-4 border-t border-slate-800">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-sm font-bold" id="userInitials">-</div>
+                <div>
+                    <p class="text-sm font-medium" id="userName">User Name</p>
+                    <p class="text-xs text-slate-400 capitalize" id="userRole">Role</p>
+                </div>
+            </div>
+            <button onclick="window.API.logout()" class="w-full py-2 px-4 border border-slate-700 rounded-md text-sm hover:bg-slate-800 transition-colors">
+                Вийти
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-16 bg-white shadow-sm flex items-center justify-between px-8">
+            <h2 class="text-xl font-semibold text-gray-800">Реєстрація нового документа</h2>
+        </header>
+
+        <div class="flex-1 overflow-auto p-8 flex justify-center">
+            
+            <div class="bg-white p-8 rounded-lg shadow-sm border border-gray-200 w-full max-w-3xl">
+                <form id="newDocumentForm" class="space-y-6">
+                    <div id="errorMessage" class="hidden bg-red-50 text-red-600 p-3 rounded-md text-sm mb-4"></div>
+                    
+                    <div class="grid grid-cols-2 gap-6">
+                        <!-- Type -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Тип документа *</label>
+                            <select id="docType" required class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2.5 border bg-white">
+                                <option value="Incoming">Вхідний</option>
+                                <option value="Outgoing">Вихідний</option>
+                                <option value="Internal">Внутрішній</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Correspondent -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Кореспондент / Контрагент *</label>
+                            <input type="text" id="docCorrespondent" required placeholder="Напр. ТОВ АБВГД, ДПС..." class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2.5 border">
+                        </div>
+                    </div>
+
+                    <!-- Title -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Тема (Короткий зміст) *</label>
+                        <input type="text" id="docTitle" required placeholder="Напр. Запит на надання інформації" class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2.5 border">
+                    </div>
+
+                    <!-- Description -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Детальний опис</label>
+                        <textarea id="docDescription" rows="4" placeholder="Додаткові деталі щодо документа..." class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2.5 border"></textarea>
+                    </div>
+
+                    <!-- File Upload -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Прикріпити файл (Скан-копія)</label>
+                        <input type="file" id="docFile" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-300 rounded-md shadow-sm p-2">
+                        <p class="text-xs text-gray-500 mt-1">Дозволені формати: PDF, Word, Excel, JPG, PNG (Макс. 10MB)</p>
+                    </div>
+
+                    <div class="pt-4 flex justify-end space-x-3 border-t border-gray-100">
+                        <button type="button" onclick="window.location.href='/pages/registry.html'" class="px-4 py-2 border border-gray-300 text-gray-700 text-sm font-medium rounded-md shadow-sm hover:bg-gray-50 focus:outline-none">
+                            Скасувати
+                        </button>
+                        <button type="submit" id="submitBtn" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            Зареєструвати документ
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+        </div>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/new-document.js"></script>
+</body>
+</html>

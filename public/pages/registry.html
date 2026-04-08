@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini-EDMS | Журнал документів</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex">
+
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-900 text-white flex flex-col">
+        <div class="h-16 flex items-center justify-center border-b border-slate-800">
+            <h1 class="text-xl font-bold tracking-wider">Mini-EDMS</h1>
+        </div>
+        <nav class="flex-1 px-4 py-6 space-y-2">
+            <a href="/pages/dashboard.html" class="block px-4 py-2 hover:bg-slate-800 rounded-md transition-colors">
+                Дашборд
+            </a>
+            <a href="/pages/registry.html" class="block px-4 py-2 bg-blue-600 rounded-md transition-colors">
+                Журнал документів
+            </a>
+            <a href="/pages/new-document.html" class="block px-4 py-2 hover:bg-slate-800 rounded-md transition-colors" id="navNewDoc">
+                Новий документ
+            </a>
+        </nav>
+        <div class="p-4 border-t border-slate-800">
+            <div class="flex items-center space-x-3 mb-4">
+                <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-sm font-bold" id="userInitials">
+                    -
+                </div>
+                <div>
+                    <p class="text-sm font-medium" id="userName">User Name</p>
+                    <p class="text-xs text-slate-400 capitalize" id="userRole">Role</p>
+                </div>
+            </div>
+            <button onclick="window.API.logout()" class="w-full py-2 px-4 border border-slate-700 rounded-md text-sm hover:bg-slate-800 transition-colors">
+                Вийти
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+        <header class="h-16 bg-white shadow-sm flex items-center justify-between px-8">
+            <h2 class="text-xl font-semibold text-gray-800">Журнал реєстрації документів</h2>
+            <div class="flex items-center space-x-4">
+                <button onclick="window.location.href='/pages/new-document.html'" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none" id="headerNewDocBtn">
+                    + Зареєструвати
+                </button>
+            </div>
+        </header>
+
+        <div class="flex-1 overflow-auto p-8 flex flex-col">
+            
+            <!-- Filters -->
+            <div class="bg-white p-4 rounded-lg shadow-sm mb-6 flex flex-wrap gap-4 items-end border border-gray-200">
+                <div class="flex-1 min-w-[200px]">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Пошук</label>
+                    <input type="text" id="searchInput" placeholder="Пошук за номером, темою..." class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                </div>
+                <div class="w-48">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Тип документа</label>
+                    <select id="typeFilter" class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border bg-white">
+                        <option value="">Всі типи</option>
+                        <option value="Incoming">Вхідні</option>
+                        <option value="Outgoing">Вихідні</option>
+                        <option value="Internal">Внутрішні</option>
+                    </select>
+                </div>
+                <div class="w-48">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Статус</label>
+                    <select id="statusFilter" class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border bg-white">
+                        <option value="">Всі статуси</option>
+                        <option value="Draft">Чернетка</option>
+                        <option value="Registered">Зареєстровано</option>
+                        <option value="Review">На розгляді</option>
+                        <option value="InProgress">В роботі</option>
+                        <option value="Executed">Виконано</option>
+                        <option value="Archived">В архіві</option>
+                    </select>
+                </div>
+                <button id="applyFiltersBtn" class="px-4 py-2 bg-gray-800 text-white text-sm font-medium rounded-md shadow-sm hover:bg-gray-900 h-10">
+                    Застосувати
+                </button>
+            </div>
+
+            <!-- Documents Table -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 flex-1 flex flex-col overflow-hidden">
+                <div class="overflow-x-auto flex-1">
+                    <table class="min-w-full text-left text-sm text-gray-600">
+                        <thead class="bg-gray-50 text-gray-700 sticky top-0 z-10">
+                            <tr>
+                                <th class="px-6 py-3 font-medium border-b">Реєстр. номер</th>
+                                <th class="px-6 py-3 font-medium border-b">Тип</th>
+                                <th class="px-6 py-3 font-medium border-b">Тема документа</th>
+                                <th class="px-6 py-3 font-medium border-b">Кореспондент</th>
+                                <th class="px-6 py-3 font-medium border-b">Статус</th>
+                                <th class="px-6 py-3 font-medium border-b">Виконавець</th>
+                                <th class="px-6 py-3 font-medium border-b">Дедлайн</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200 bg-white" id="documentsTableBody">
+                            <!-- Dynamic Content -->
+                            <tr>
+                                <td colspan="7" class="px-6 py-10 text-center text-gray-500">Завантаження бази документів...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+        </div>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/registry.js"></script>
+</body>
+</html>
