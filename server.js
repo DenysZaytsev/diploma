@@ -24,9 +24,11 @@ app.use(express.json());
 // Serve static files from 'uploads' directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Basic route
+// Serve frontend static files
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.get('/', (req, res) => {
-  res.send('EDMS API is running...');
+  res.sendFile(path.join(__dirname, 'public', 'pages', 'login.html'));
 });
 
 // Routes

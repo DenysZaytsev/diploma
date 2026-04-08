@@ -13,7 +13,7 @@ router.get('/', protect, async (req, res) => {
     if (req.user.role === 'employee') {
       filter.creator = req.user._id;
     } else if (req.user.role === 'signatory') {
-      filter.status = 'approved';
+      filter.status = 'on_signing';
     }
 
     const totalDocs = await Document.countDocuments(filter);
@@ -23,8 +23,8 @@ router.get('/', protect, async (req, res) => {
     const outgoingDocs = await Document.countDocuments({ ...filter, direction: 'outgoing' });
     
     // Status breakdowns
-    const inProgressDocs = await Document.countDocuments({ ...filter, status: 'in_progress' });
-    const underReviewDocs = await Document.countDocuments({ ...filter, status: 'under_review' });
+    const inProgressDocs = await Document.countDocuments({ ...filter, status: 'on_signing' });
+    const underReviewDocs = await Document.countDocuments({ ...filter, status: 'on_approval' });
 
     res.json({
       totalDocs,
