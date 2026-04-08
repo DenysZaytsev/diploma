@@ -2,7 +2,52 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const SystemAuditLog = require('../models/SystemAuditLog');
 const { protect, authorize } = require('../middleware/authMiddleware');
+
+// Допоміжна функція для запису в аудит-лог
+const logAdminAction = async (req, action, targetEmail, details) => {
+    try {
+        await SystemAuditLog.create({
+            adminId: req.user._id,
+            adminName: req.user.fullName,
+            adminEmail: req.user.email,
+            action,
+            targetEmail,
+            details
+        });
+    } catch (err) {
+        console.error('System Audit Log Error:', err);
+    }
+};
+
+// Отримати логи аудиту адміністраторів (має бути ПЕРЕД /:id маршрутами)
+router.get('/system/audit', protect, authorize('admin'), async (req, res) => {
+    try {
+        let query = {};
+        if (req.query.search) {
+            const regex = new RegExp(req.query.search, 'i');
+            query.$or = [
+                { adminName: regex },
+                { adminEmail: regex },
+                { targetEmail: regex },
+                { details: regex },
+                { action: regex }
+            ];
+        }
+        if (req.query.action) {
+            query.action = req.query.action;
+        }
+
+        const sortField = req.query.sortBy || 'createdAt';
+        const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
+
+        const logs = await SystemAuditLog.find(query).sort({ [sortField]: sortOrder });
+        res.json(logs);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
 
 // Отримати список всіх користувачів (лише адмін, згідно з документацією)
 router.get('/', protect, authorize('admin'), async (req, res) => {
@@ -41,6 +86,8 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
         const passwordHash = await bcrypt.hash(password, salt);
         
         const user = await User.create({ email, passwordHash, role, fullName, department });
+        
+        await logAdminAction(req, 'Створення', email, `Створено користувача. Роль: ${role}, Відділ: ${department || 'Немає'}`);
         res.status(201).json({ _id: user._id, email: user.email, fullName: user.fullName });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -87,12 +134,24 @@ router.patch('/:id', protect, authorize('admin'), async (req, res) => {
             updateData.passwordHash = await bcrypt.hash(password, salt);
         }
         
+        // Збір деталей для аудиту
+        let changes = [];
+        if (updateData.fullName && updateData.fullName !== targetUser.fullName) changes.push('Ім\'я');
+        if (updateData.role && updateData.role !== targetUser.role) changes.push(`Роль (${targetUser.role} -> ${updateData.role})`);
+        if (updateData.department !== undefined && updateData.department !== targetUser.department) changes.push('Відділ');
+        if (updateData.isBlocked !== undefined && updateData.isBlocked !== targetUser.isBlocked) changes.push(updateData.isBlocked ? 'Заблоковано' : 'Розблоковано');
+        if (password) changes.push('Змінено пароль');
+
         const user = await User.findByIdAndUpdate(
             req.params.id, 
             updateData, 
             { new: true, runValidators: true }
         ).select('-passwordHash');
         
+        if (changes.length > 0) {
+            await logAdminAction(req, 'Редагування', targetUser.email, `Змінено: ${changes.join(', ')}`);
+        }
+
         if (!user) return res.status(404).json({ message: 'Користувача не знайдено' });
         res.json(user);
     } catch (error) {
@@ -121,6 +180,8 @@ router.delete('/:id', protect, authorize('admin'), async (req, res) => {
         
         const user = await User.findByIdAndDelete(req.params.id);
         if (!user) return res.status(404).json({ message: 'Користувача не знайдено' });
+        
+        await logAdminAction(req, 'Видалення', targetUser.email, `Видалено користувача: ${targetUser.fullName}`);
         
         res.json({ message: 'Користувача успішно видалено' });
     } catch (error) {

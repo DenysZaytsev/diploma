@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Аудит Лог Адміністраторів - EDMS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 flex flex-col min-h-screen">
+    <nav class="bg-indigo-600 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-4">
+                    <span class="text-white text-xl font-bold">EDMS Admin</span>
+                    <a href="/pages/users.html" class="text-indigo-100 hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium transition">Користувачі</a>
+                    <a href="/pages/document-types.html" class="text-indigo-100 hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium transition">Типи документів</a>
+                    <a href="/pages/departments.html" class="text-indigo-100 hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium transition">Відділи</a>
+                    <a href="/pages/settings.html" class="text-indigo-100 hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium transition">Налаштування</a>
+                    <a href="/pages/admin-audit.html" class="bg-indigo-700 text-white px-3 py-2 rounded-md text-sm font-medium">Аудит лог</a>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="h-8 w-8 rounded-full bg-indigo-800 flex items-center justify-center text-white font-bold" id="userInitials">A</div>
+                    <button onclick="window.API.logout()" class="bg-indigo-500 hover:bg-indigo-700 text-white px-3 py-2 rounded-md text-sm">Вийти</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-grow max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 w-full">
+        <div class="bg-white rounded-lg shadow-sm p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-bold text-gray-900">Аудит лог дій адміністраторів</h1>
+            </div>
+            
+            <!-- Панель фільтрів -->
+            <div class="flex flex-col sm:flex-row gap-4 mb-4 bg-gray-50 p-4 rounded-md border border-gray-200">
+                <div class="flex-1">
+                    <input type="text" id="searchInput" placeholder="Пошук по імені, email чи деталях..." class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500">
+                </div>
+                <select id="actionFilter" class="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500">
+                    <option value="">Всі дії</option>
+                    <option value="Створення">Створення</option>
+                    <option value="Редагування">Редагування</option>
+                    <option value="Видалення">Видалення</option>
+                </select>
+                <select id="sortFilter" class="px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500">
+                    <option value="desc">Спершу нові</option>
+                    <option value="asc">Спершу старі</option>
+                </select>
+                <button id="applyFiltersBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700 font-medium">Застосувати</button>
+            </div>
+
+            <div class="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
+                <table class="min-w-full divide-y divide-gray-300">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дата та Час</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Адміністратор</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дія</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Користувач (Ціль)</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Деталі</th>
+                        </tr>
+                    </thead>
+                    <tbody id="auditTableBody" class="bg-white divide-y divide-gray-200">
+                        <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500">Завантаження...</td></tr>
+                    </tbody>
+                </table>
+                <div id="paginationControls" class="bg-white"></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/admin-audit.js"></script>
+</body>
+</html>

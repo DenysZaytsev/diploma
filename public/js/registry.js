@@ -12,12 +12,22 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('userName').textContent = user.fullName || 'User';
     
     const roleLabels = {
-        'employee': 'Працівник', // Змінено з "Контрактор"
-        'manager': 'Менеджер',
+        'employee': 'Працівник',
+        'approver': 'Керівник',
         'admin': 'Адміністратор',
         'signatory': 'Підписант'
     };
-    document.getElementById('userRole').textContent = roleLabels[user.role] || user.role;
+    const roleColors = {
+        'employee': 'bg-blue-100 text-blue-800 border border-blue-200',
+        'approver': 'bg-purple-100 text-purple-800 border border-purple-200',
+        'admin': 'bg-red-100 text-red-800 border border-red-200',
+        'signatory': 'bg-green-100 text-green-800 border border-green-200'
+    };
+    const userRoleEl = document.getElementById('userRole');
+    if (userRoleEl) {
+        userRoleEl.textContent = roleLabels[user.role] || user.role;
+        userRoleEl.className = `px-2 py-0.5 text-xs font-medium rounded-full inline-block mt-1 ${roleColors[user.role] || 'bg-gray-100 text-gray-800'}`;
+    }
     
     const initials = (user.fullName || 'U').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
     document.getElementById('userInitials').textContent = initials;
@@ -48,10 +58,9 @@ document.addEventListener('DOMContentLoaded', () => {
         statusFilter.innerHTML = `
             <option value="">Всі статуси</option>
             <option value="draft">Чернетка</option>
-            <option value="registered">Зареєстровані</option>
-            <option value="under_review">На розгляді</option>
-            <option value="in_progress">В роботі</option>
-            <option value="completed">Виконано</option>
+            <option value="on_approval">На погодженні</option>
+            <option value="on_signing">На підписанні</option>
+            <option value="signed">Підписано</option>
             <option value="rejected">Відхилено</option>
             <option value="archived">В архіві</option>
         `;
@@ -84,7 +93,7 @@ async function fetchDocumentTypes() {
 
 async function fetchDocuments() {
     const tbody = document.getElementById('documentsTableBody');
-    tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-10 text-center text-gray-500">Завантаження...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-gray-500">Завантаження...</td></tr>';
 
     try {
         // Build query string based on filters
@@ -108,7 +117,7 @@ async function fetchDocuments() {
 
     } catch (error) {
         console.error('Error fetching documents:', error);
-        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-10 text-center text-red-500">Помилка завантаження даних. Перевірте з\'єднання з сервером.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-red-500">Помилка завантаження даних. Перевірте з\'єднання з сервером.</td></tr>';
     }
 }
 
@@ -127,11 +136,13 @@ function renderTablePage() {
     const thead = tbody.previousElementSibling;
     if (thead) {
         thead.innerHTML = `<tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">Назва</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Тип</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Відділ</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Контрагент</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ініціатор</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Відповідальний</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дедлайн</th>
         </tr>`;
     }
@@ -139,7 +150,7 @@ function renderTablePage() {
     tbody.innerHTML = '';
 
     if (globalDocsList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-10 text-center text-gray-500">Документів не знайдено</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-gray-500">Документів не знайдено</td></tr>';
         pagination.innerHTML = '';
         return;
     }
@@ -176,16 +187,14 @@ function renderTablePage() {
         let statusColor = 'bg-gray-100 text-gray-800';
         const statusLabels = {
             'draft': 'Чернетка', 
-            'registered': 'Зареєстровані', 
-            'under_review': 'На розгляді', 
-            'in_progress': 'В роботі',
-            'completed': 'Виконано', 
+            'on_approval': 'На погодженні', 
+            'on_signing': 'На підписанні',
+            'signed': 'Підписано', 
             'rejected': 'Відхилено', 'archived': 'В архіві'
         };
-        if (doc.status === 'registered') statusColor = 'bg-blue-100 text-blue-800';
-        if (doc.status === 'under_review') statusColor = 'bg-yellow-100 text-yellow-800';
-        if (doc.status === 'in_progress') statusColor = 'bg-orange-100 text-orange-800';
-        if (doc.status === 'completed') statusColor = 'bg-green-100 text-green-800';
+        if (doc.status === 'on_approval') statusColor = 'bg-yellow-100 text-yellow-800';
+        if (doc.status === 'on_signing') statusColor = 'bg-blue-100 text-blue-800';
+        if (doc.status === 'signed') statusColor = 'bg-green-100 text-green-800';
         if (doc.status === 'rejected') statusColor = 'bg-red-100 text-red-800';
         if (doc.status === 'archived') statusColor = 'bg-gray-300 text-gray-800';
 
@@ -193,8 +202,15 @@ function renderTablePage() {
         const directionLabels = { 'incoming': '📥 Вхідний', 'outgoing': '📤 Вихідний', 'internal': '📁 Внутр.' };
         const directionText = directionLabels[doc.direction] || '—';
 
-        // Creator
-        const creatorName = doc.creator ? doc.creator.fullName : '<span class="text-gray-400 italic">Невідомо</span>';
+        // Відповідальний
+        let responsibleName = '<span class="text-gray-400 italic">Невідомо</span>';
+        if (['draft', 'rejected', 'archived'].includes(doc.status)) {
+            responsibleName = doc.creator ? doc.creator.fullName : responsibleName;
+        } else if (doc.status === 'on_approval') {
+            responsibleName = doc.approver ? doc.approver.fullName : responsibleName;
+        } else if (['on_signing', 'signed'].includes(doc.status)) {
+            responsibleName = doc.signatory ? doc.signatory.fullName : responsibleName;
+        }
 
         // Deadline
         let deadlineText = '<span class="text-gray-400">-</span>';
@@ -208,6 +224,7 @@ function renderTablePage() {
         }
 
         tr.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${doc.regNumber || '—'}</td>
             <td class="px-6 py-4 whitespace-normal break-words font-medium text-gray-900">${doc.title}</td>
             <td class="px-6 py-4 whitespace-nowrap">
                 <span class="block text-xs font-semibold text-gray-500 mb-1">${directionText}</span>
@@ -215,13 +232,14 @@ function renderTablePage() {
                     ${typeLabels[doc.type] || doc.type || 'Інше'}
                 </span>
             </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${doc.department || '—'}</td>
             <td class="px-6 py-4 whitespace-normal break-words text-gray-600">${doc.counterparty || '—'}</td>
             <td class="px-6 py-4 whitespace-nowrap">
                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor}">
                     ${statusLabels[doc.status] || doc.status}
                 </span>
             </td>
-            <td class="px-6 py-4 whitespace-normal break-words text-sm text-gray-700">${creatorName}</td>
+            <td class="px-6 py-4 whitespace-normal break-words text-sm text-gray-700">${responsibleName}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm ${deadlineClass}">${deadlineText}</td>
         `;
         tbody.appendChild(tr);

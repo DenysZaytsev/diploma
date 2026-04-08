@@ -30,8 +30,19 @@ const createDocument = async (req, res) => {
       path: `/uploads/${f.filename}`
     })) : [];
 
+    const deptPrefixMap = {
+        'Фінансовий відділ': 'FIN',
+        'IT відділ': 'ITD',
+        'HR відділ': 'HRD',
+        'Маркетинг': 'MRK',
+        'Юридичний відділ': 'LEG'
+    };
+    const deptPrefix = deptPrefixMap[req.user.department] || 'DOC';
+    const regNumber = `${deptPrefix}-${Math.floor(100000 + Math.random() * 900000)}`;
+
     const document = await Document.create({
       title, direction, type, counterparty, dueDate,
+      regNumber,
       department: req.user.department || 'Без відділу', // Прив'язуємо документ до відділу автора
       creator: req.user._id,
       status: 'draft',
@@ -68,19 +79,19 @@ const getDocuments = async (req, res) => {
       filter.creator = req.user._id;
       if (status) filter.status = status;
     } else if (req.user.role === 'signatory') {
-      // Підписант бачить документи в роботі ТІЛЬКИ свого відділу
-      filter.status = 'in_progress';
+      // Підписант бачить документи на підписанні ТІЛЬКИ свого відділу
+      filter.status = 'on_signing';
       filter.department = req.user.department;
     } else {
-      // Для Manager та Admin
+      // Для Approver та Admin
       if (status) filter.status = status;
-      // Менеджер бачить документи тільки свого відділу
-      if (req.user.role === 'manager') filter.department = req.user.department;
+      // Погоджувач бачить документи тільки свого відділу
+      if (req.user.role === 'approver') filter.department = req.user.department;
     }
 
     const documents = await Document.find(filter)
       .populate('creator', 'fullName')
-      .populate('manager', 'fullName')
+      .populate('approver', 'fullName')
       .populate('signatory', 'fullName')
       .sort({ createdAt: -1 });
 
@@ -94,7 +105,7 @@ const getDocumentById = async (req, res) => {
   try {
     const document = await Document.findById(req.params.id)
       .populate('creator', 'fullName department')
-      .populate('manager', 'fullName department')
+      .populate('approver', 'fullName department')
       .populate('signatory', 'fullName department');
 
     if (!document || document.isDeleted) {
@@ -120,10 +131,10 @@ const submitDocument = async (req, res) => {
     if (!['draft', 'rejected'].includes(doc.status)) return res.status(400).json({ message: 'Invalid status' });
 
     const oldStatus = doc.status;
-    doc.status = 'under_review';
+    doc.status = 'on_approval';
     await doc.save();
 
-    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: oldStatus, toStatus: 'under_review' });
+    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: oldStatus, toStatus: 'on_approval' });
     res.json(doc);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -134,13 +145,14 @@ const approveDocument = async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
-    if (doc.status !== 'under_review') return res.status(400).json({ message: 'Document must be under review' });
+    if (doc.status !== 'on_approval') return res.status(400).json({ message: 'Document must be on approval' });
 
-    doc.status = 'in_progress';
-    doc.manager = req.user._id;
+    // Автоматичний перехід approved -> on_signing
+    doc.status = 'on_signing';
+    doc.approver = req.user._id;
     await doc.save();
 
-    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'under_review', toStatus: 'in_progress' });
+    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'on_approval', toStatus: 'on_signing', comment: 'Погоджено. Автоматично передано на підписання.' });
     res.json(doc);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -154,13 +166,16 @@ const rejectDocument = async (req, res) => {
 
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
-    if (doc.status !== 'under_review') return res.status(400).json({ message: 'Document must be under review' });
+    if (!['on_approval', 'on_signing'].includes(doc.status)) return res.status(400).json({ message: 'Document must be on approval or on signing' });
 
+    const oldStatus = doc.status;
     doc.status = 'rejected';
-    doc.manager = req.user._id;
+    
+    if (oldStatus === 'on_approval') doc.approver = req.user._id;
+    if (oldStatus === 'on_signing') doc.signatory = req.user._id;
     await doc.save();
 
-    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'under_review', toStatus: 'rejected', comment });
+    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: oldStatus, toStatus: 'rejected', comment });
     res.json(doc);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -171,13 +186,13 @@ const signDocument = async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
-    if (doc.status !== 'in_progress') return res.status(400).json({ message: 'Document must be in progress first' });
+    if (doc.status !== 'on_signing') return res.status(400).json({ message: 'Document must be on signing first' });
 
-    doc.status = 'completed';
+    doc.status = 'signed';
     doc.signatory = req.user._id;
     await doc.save();
     
-    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'in_progress', toStatus: 'completed', comment: 'Signed with mock KEP / Completed' });
+    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'on_signing', toStatus: 'signed', comment: 'Накладено КЕП' });
     res.json(doc);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -188,12 +203,12 @@ const archiveDocument = async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
-    if (doc.status !== 'completed') return res.status(400).json({ message: 'Document must be completed first' });
+    if (doc.status !== 'signed') return res.status(400).json({ message: 'Document must be signed first' });
 
     doc.status = 'archived';
     await doc.save();
     
-    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'completed', toStatus: 'archived' });
+    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'signed', toStatus: 'archived' });
     res.json(doc);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });

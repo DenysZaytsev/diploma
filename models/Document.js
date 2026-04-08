@@ -5,6 +5,10 @@ const documentSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  regNumber: {
+    type: String,
+    unique: true,
+  },
   direction: {
     type: String,
     enum: ['incoming', 'outgoing', 'internal'],
@@ -26,7 +30,7 @@ const documentSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft', 'registered', 'under_review', 'in_progress', 'completed', 'rejected', 'archived'],
+    enum: ['draft', 'on_approval', 'on_signing', 'signed', 'rejected', 'archived'],
     default: 'draft',
   },
   creator: {
@@ -34,7 +38,7 @@ const documentSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
   },
-  manager: {
+  approver: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
   },

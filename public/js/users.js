@@ -94,10 +94,16 @@ function renderTablePage() {
     pageItems.forEach(u => {
             const tr = document.createElement('tr');
             tr.className = (u.isBlocked ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50') + ' cursor-pointer transition-colors';
-            const roleLabels = { 'employee': 'Працівник', 'manager': 'Менеджер', 'admin': 'Адміністратор', 'signatory': 'Підписант' };
+            const roleLabels = { 'employee': 'Працівник', 'approver': 'Керівник', 'admin': 'Адміністратор', 'signatory': 'Підписант' };
+            const roleColors = {
+                'employee': 'bg-blue-100 text-blue-800 border border-blue-200',
+                'approver': 'bg-purple-100 text-purple-800 border border-purple-200',
+                'admin': 'bg-red-100 text-red-800 border border-red-200',
+                'signatory': 'bg-green-100 text-green-800 border border-green-200'
+            };
             
             let displayedRole = roleLabels[u.role] || u.role;
-            let roleBadgeClass = 'bg-blue-100 text-blue-800';
+            let roleBadgeClass = roleColors[u.role] || 'bg-gray-100 text-gray-800';
             if (u.isSuperAdmin) {
                 displayedRole = 'Головний Адміністратор';
                 roleBadgeClass = 'bg-indigo-700 text-white shadow-sm';
@@ -123,8 +129,23 @@ function renderTablePage() {
                 const blockBtnClass = u.isBlocked ? 'text-green-600 hover:text-green-900' : 'text-orange-600 hover:text-orange-900';
                 actionButtons = `
                     <button onclick="event.stopPropagation(); toggleBlockUser('${u._id || u.id}', ${u.isBlocked})" class="${blockBtnClass}">${blockBtnText}</button>
-                    <button onclick="event.stopPropagation(); deleteUser('${u._id || u.id}')" class="text-red-600 hover:text-red-900">Видалити</button>
                 `;
+            }
+            
+            // Логіка для кнопки "Змінити пароль"
+            let canChangePassword = false;
+            if (amISuperAdmin) {
+                canChangePassword = true; // SuperAdmin може міняти всім
+            } else if (u.role !== 'admin' && !u.isSuperAdmin) {
+                canChangePassword = true; // Admin може міняти тільки не-адмінам
+            }
+
+            if (canChangePassword && !isSelf) {
+                actionButtons += `<button onclick="event.stopPropagation(); openChangePasswordModal('${u._id || u.id}')" class="text-indigo-600 hover:text-indigo-900 mx-2">Пароль</button>`;
+            }
+            
+            if (!isSelf && !u.isSuperAdmin && !(u.role === 'admin' && !amISuperAdmin)) {
+                actionButtons += `<button onclick="event.stopPropagation(); deleteUser('${u._id || u.id}')" class="text-red-600 hover:text-red-900">Видалити</button>`;
             }
 
             tr.onclick = () => {
@@ -149,7 +170,7 @@ function renderTablePage() {
                 </td>
                 <td class="px-6 py-4 whitespace-normal break-words text-gray-500">${u.department || '—'}</td>
                 <td class="px-6 py-4 whitespace-nowrap">${statusBadge}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     ${actionButtons}
                 </td>
             `;
@@ -216,14 +237,14 @@ window.openAddUserModal = () => {
     if (fullCurrentUser.isSuperAdmin) {
         newRoleSelect.innerHTML = `
             <option value="employee">Працівник (Ініціатор)</option>
-            <option value="manager">Менеджер підрозділу</option>
+            <option value="approver">Керівник відділу</option>
             <option value="signatory">Підписант (Signatory)</option>
             <option value="admin">Адміністратор</option>
         `;
     } else {
         newRoleSelect.innerHTML = `
             <option value="employee">Працівник (Ініціатор)</option>
-            <option value="manager">Менеджер підрозділу</option>
+            <option value="approver">Керівник відділу</option>
             <option value="signatory">Підписант (Signatory)</option>
         `;
     }
@@ -256,6 +277,46 @@ window.createUser = async (e) => {
     } finally {
         submitBtn.disabled = false;
         submitBtn.textContent = 'Зберегти';
+    }
+};
+
+// --- Логіка зміни пароля ---
+window.openChangePasswordModal = (id) => {
+    document.getElementById('changePasswordUserId').value = id;
+    document.getElementById('newPasswordInput').value = '';
+    document.getElementById('confirmPasswordInput').value = '';
+    document.getElementById('changePasswordModal').classList.remove('hidden');
+};
+
+window.closeChangePasswordModal = () => {
+    document.getElementById('changePasswordModal').classList.add('hidden');
+    document.getElementById('changePasswordForm').reset();
+};
+
+window.submitChangePassword = async (e) => {
+    e.preventDefault();
+    const pwd1 = document.getElementById('newPasswordInput').value;
+    const pwd2 = document.getElementById('confirmPasswordInput').value;
+
+    if (pwd1 !== pwd2) {
+        window.API.showModal({ title: 'Помилка', message: 'Паролі не співпадають!' });
+        return;
+    }
+
+    const id = document.getElementById('changePasswordUserId').value;
+    const btn = document.getElementById('savePasswordBtn');
+    btn.disabled = true;
+    btn.textContent = 'Збереження...';
+
+    try {
+        await window.API.fetchAPI(`/users/${id}`, 'PATCH', { password: pwd1 });
+        closeChangePasswordModal();
+        window.API.showModal({ title: 'Успіх', message: 'Пароль успішно змінено.' });
+    } catch (error) {
+        window.API.showModal({ title: 'Помилка', message: error.message });
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Зберегти пароль';
     }
 };
 
@@ -305,13 +366,13 @@ window.openEditUserModal = (id) => {
             if (!fullCurrentUser.isSuperAdmin) {
                 roleSelect.innerHTML = `
                     <option value="employee">Працівник (Ініціатор)</option>
-                    <option value="manager">Менеджер підрозділу</option>
+                    <option value="approver">Керівник відділу</option>
                     <option value="signatory">Підписант (Signatory)</option>
                 `;
             } else { // Поточний користувач (той, хто редагує) є SuperAdmin, він може призначати всі ролі
                 roleSelect.innerHTML = `
                     <option value="employee">Працівник (Ініціатор)</option>
-                    <option value="manager">Менеджер підрозділу</option>
+                    <option value="approver">Керівник відділу</option>
                     <option value="signatory">Підписант (Signatory)</option>
                     <option value="admin">Адміністратор</option>
                 `;

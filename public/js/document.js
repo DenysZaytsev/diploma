@@ -9,12 +9,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('userName').textContent = user.fullName || 'User';
     
     const roleLabels = {
-        'employee': 'Працівник', // Змінено з "Контрактор"
-        'manager': 'Менеджер',
+        'employee': 'Працівник',
+        'approver': 'Керівник',
         'admin': 'Адміністратор',
         'signatory': 'Підписант'
     };
-    document.getElementById('userRole').textContent = roleLabels[user.role] || user.role;
+    const roleColors = {
+        'employee': 'bg-blue-100 text-blue-800 border border-blue-200',
+        'approver': 'bg-purple-100 text-purple-800 border border-purple-200',
+        'admin': 'bg-red-100 text-red-800 border border-red-200',
+        'signatory': 'bg-green-100 text-green-800 border border-green-200'
+    };
+    const userRoleEl = document.getElementById('userRole');
+    if (userRoleEl) {
+        userRoleEl.textContent = roleLabels[user.role] || user.role;
+        userRoleEl.className = `px-2 py-0.5 text-xs font-medium rounded-full inline-block mt-1 ${roleColors[user.role] || 'bg-gray-100 text-gray-800'}`;
+    }
     const initials = (user.fullName || 'U').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
     document.getElementById('userInitials').textContent = initials;
 
@@ -61,7 +71,7 @@ async function loadDocumentDetails() {
 
         // Fill Details
         document.getElementById('headerDocTitle').textContent = doc.title || 'Документ';
-        document.getElementById('docRegNumber').textContent = `ID: ${doc._id.substring(0, 6).toUpperCase()}`;
+        document.getElementById('docRegNumber').textContent = `ID: ${doc.regNumber || doc._id.substring(0, 6).toUpperCase()}`;
         document.getElementById('docTitle').textContent = doc.title;
         document.getElementById('docCorrespondent').textContent = doc.counterparty || '—';
         document.getElementById('docDate').textContent = new Date(doc.createdAt).toLocaleDateString('uk-UA');
@@ -222,26 +232,28 @@ async function loadDocumentDetails() {
         const statusBadge = document.getElementById('docStatusBadge');
         const statusLabels = {
             'draft': 'Чернетка', 
-            'registered': 'Зареєстровані', 
-            'under_review': 'На розгляді', 
-            'in_progress': 'В роботі',
-            'completed': 'Виконано', 
+            'on_approval': 'На погодженні', 
+            'on_signing': 'На підписанні',
+            'signed': 'Підписано', 
             'rejected': 'Відхилено', 'archived': 'В архіві'
         };
         statusBadge.textContent = statusLabels[doc.status] || doc.status;
         
         let statusColor = 'bg-gray-100 text-gray-800';
-        if (doc.status === 'registered') statusColor = 'bg-blue-100 text-blue-800';
-        if (doc.status === 'under_review') statusColor = 'bg-yellow-100 text-yellow-800';
-        if (doc.status === 'in_progress') statusColor = 'bg-orange-100 text-orange-800';
-        if (doc.status === 'completed') statusColor = 'bg-green-100 text-green-800';
+        if (doc.status === 'on_approval') statusColor = 'bg-yellow-100 text-yellow-800';
+        if (doc.status === 'on_signing') statusColor = 'bg-blue-100 text-blue-800';
+        if (doc.status === 'signed') statusColor = 'bg-green-100 text-green-800';
         if (doc.status === 'rejected') statusColor = 'bg-red-100 text-red-800';
         if (doc.status === 'archived') statusColor = 'bg-gray-300 text-gray-800';
         statusBadge.className = `px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full ${statusColor}`;
 
         // Execution Info
-        const managerEl = document.getElementById('docManager');
-        if (managerEl) managerEl.textContent = doc.manager ? doc.manager.fullName : '—';
+        const approverEl = document.getElementById('docManager'); // Залишаємо ID з HTML, але міняємо логіку
+        if (approverEl) {
+            approverEl.textContent = doc.approver ? doc.approver.fullName : '—';
+            const labelEl = approverEl.previousElementSibling;
+            if (labelEl && labelEl.tagName.toLowerCase() === 'dt') labelEl.textContent = 'Керівник';
+        }
         
         const executorEl = document.getElementById('docExecutor');
         if (executorEl) {
@@ -355,11 +367,11 @@ function renderActionButtons(doc, user) {
         }
     }
 
-    // Manager Actions
-    if (user.role === 'manager') {
-        if (doc.status === 'under_review') { // Менеджер розглядає документ
-            actionContainer.appendChild(createBtn('✅ Погодити (В роботу)', 'bg-green-600 text-white hover:bg-green-700', () => 
-                performActionWithConfirm('approve', 'Погодження', 'Ви підтверджуєте погодження цього документа та переведення його в статус "В роботі"?')
+    // Approver Actions
+    if (user.role === 'approver') {
+        if (doc.status === 'on_approval') { 
+            actionContainer.appendChild(createBtn('✅ Погодити', 'bg-green-600 text-white hover:bg-green-700', () => 
+                performActionWithConfirm('approve', 'Погодження', 'Погодити документ та передати його на підписання?')
             ));
             
             actionContainer.appendChild(createBtn('❌ Відхилити', 'bg-red-600 text-white hover:bg-red-700', () => {
@@ -371,7 +383,7 @@ function renderActionButtons(doc, user) {
                 });
             }));
         }
-        if (doc.status === 'completed') { // Менеджер може архівувати виконаний документ
+        if (doc.status === 'signed') { // Погоджувач може архівувати підписаний документ
             actionContainer.appendChild(createBtn('В архів', 'bg-gray-600 text-white hover:bg-gray-700', () => 
                 performActionWithConfirm('archive', 'Архівування', 'Перемістити документ до архіву?')
             ));
@@ -380,10 +392,19 @@ function renderActionButtons(doc, user) {
 
     // Signatory Actions
     if (user.role === 'signatory' && doc.signatory && doc.signatory._id === user.id) { // Тільки якщо він є підписантом цього документа
-        if (doc.status === 'in_progress') { // Підписант підписує документ, який "в роботі"
+        if (doc.status === 'on_signing') { // Підписант підписує документ
             actionContainer.appendChild(createBtn('✍️ Підписати (КЕП)', 'bg-indigo-600 text-white hover:bg-indigo-700', () => 
                 performActionWithConfirm('sign', 'Підписання', 'Накласти електронний підпис на цей документ?')
             ));
+            
+            actionContainer.appendChild(createBtn('❌ Відхилити', 'bg-red-600 text-white hover:bg-red-700 ml-3', () => {
+                window.API.showModal({
+                    title: 'Відхилення документа',
+                    message: 'Вкажіть причину відмови від підпису:',
+                    type: 'prompt',
+                    onConfirm: (comment) => performAction('reject', { comment })
+                });
+            }));
         }
     }
 
