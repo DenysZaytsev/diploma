@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     window.API.checkAuth();
     
     const user = window.API.getUser();
@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div class="mb-6">
             <label class="block text-sm font-medium text-gray-700">Прикріпити файли</label>
             <input type="file" id="docFiles" multiple class="mt-1 block w-full text-gray-700">
+            <p class="text-xs text-gray-500 mt-1">Щоб обрати декілька файлів одразу, утримуйте клавішу <strong>Ctrl</strong> (Windows) або <strong>Cmd</strong> (Mac) у вікні вибору.</p>
         </div>
         <div class="flex justify-end">
             <button type="submit" id="submitBtn" class="bg-indigo-600 text-white px-6 py-2 rounded-md hover:bg-indigo-700 transition">Зберегти як Чернетку</button>

@@ -260,6 +260,33 @@ const deleteDocument = async (req, res) => {
     }
 };
 
+const deleteFile = async (req, res) => {
+    try {
+        const doc = await Document.findById(req.params.id);
+        if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Document not found' });
+
+        // Перевірка прав
+        if (req.user.role === 'employee' && doc.creator.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        if (!['draft', 'rejected'].includes(doc.status)) {
+            return res.status(400).json({ message: 'Cannot delete files at this stage' });
+        }
+
+        const fileIndex = doc.files.findIndex(f => f._id.toString() === req.params.fileId);
+        if (fileIndex === -1) return res.status(404).json({ message: 'File not found' });
+
+        const fileName = doc.files[fileIndex].originalName;
+        doc.files.splice(fileIndex, 1);
+        await doc.save();
+        
+        await createAuditLog(doc._id, req.user._id, 'file_delete', { comment: `Видалено файл: ${fileName}` });
+        res.json({ message: 'File deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
   createDocument,
   getDocuments,
@@ -271,5 +298,6 @@ module.exports = {
   archiveDocument,
   getDocumentAudit,
   deleteDocument,
-  uploadFiles
+  uploadFiles,
+  deleteFile
 };

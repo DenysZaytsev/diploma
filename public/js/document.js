@@ -79,6 +79,25 @@ async function loadDocumentDetails() {
         // Files Viewer
         const viewerContainer = document.getElementById('fileViewerContainer');
         
+        // Примусово прибираємо внутрішній скрол та обмеження висоти з контейнерів, 
+        // щоб вони розтягувалися на всі файли, а скролилася вся сторінка
+        viewerContainer.style.maxHeight = 'none';
+        viewerContainer.style.height = 'auto';
+        viewerContainer.style.overflow = 'visible';
+        viewerContainer.style.position = 'relative';
+        viewerContainer.classList.remove('overflow-y-auto', 'overflow-auto', 'max-h-96', 'max-h-[800px]', 'max-h-screen', 'h-full', 'h-screen', 'absolute', 'fixed');
+        
+        const fileSection = document.getElementById('fileSection');
+        if (fileSection) {
+            fileSection.style.maxHeight = 'none';
+            fileSection.style.height = 'auto';
+            fileSection.style.overflow = 'visible';
+            fileSection.style.position = 'relative';
+            fileSection.style.clear = 'both';
+            fileSection.style.marginTop = '2rem';
+            fileSection.classList.remove('overflow-y-auto', 'overflow-auto', 'max-h-96', 'max-h-[800px]', 'max-h-screen', 'h-full', 'h-screen', 'absolute', 'fixed', 'flex-1');
+        }
+        
         // Завжди показуємо секцію файлів, щоб відобразити або форму завантаження, або повідомлення про відсутність
         document.getElementById('fileSection').classList.remove('hidden');
         
@@ -99,96 +118,92 @@ async function loadDocumentDetails() {
         let filesHtml = '';
 
         if (doc.files && doc.files.length > 0) {
+            // Обертаємо ВСІ файли в єдиний вертикальний контейнер на 100% ширини
+            filesHtml += `<div class="flex flex-col w-full">`;
+            
             // Відображення прев'ю для файлів
             doc.files.forEach(f => {
                 const baseUrl = window.API.API_BASE_URL.replace('/api', '');
                 const fileUrl = baseUrl + f.path;
                 const ext = f.path.split('.').pop().toLowerCase();
                 
-                // Кнопки Відкрити та Друкувати (стилізовані під action buttons)
-                let buttonsHtml = `
-                    <div class="flex space-x-3 mb-4">
-                        <a href="${fileUrl}" target="_blank" class="px-4 py-2 text-sm font-medium rounded-md shadow-sm focus:outline-none bg-blue-600 text-white hover:bg-blue-700 flex items-center transition-colors">
-                            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                            Відкрити в новій вкладці
-                        </a>
-                        <a href="${fileUrl}" download="${f.originalName}" class="px-4 py-2 text-sm font-medium rounded-md shadow-sm focus:outline-none bg-gray-600 text-white hover:bg-gray-700 flex items-center transition-colors">
-                            <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                            Завантажити файл
-                        </a>
+                // Контейнер окремого файлу з нижньою рискою (окрім останнього)
+                filesHtml += `<div class="w-full flex flex-col mb-10 pb-10 border-b-2 border-gray-300 last:border-b-0 last:pb-0 last:mb-0">`;
+                
+                // 1. Назва файлу, розмір формат
+                filesHtml += `
+                    <div class="mb-4">
+                        <h4 class="text-xl font-bold text-gray-900">${f.originalName}</h4>
+                        <p class="text-sm text-gray-600 mt-1">Розмір: ${(f.size / 1024).toFixed(1)} KB | Формат: ${ext.toUpperCase()}</p>
                     </div>`;
 
-                filesHtml += `<div class="mb-12 pb-8 border-b border-gray-200 last:border-0 last:pb-0">`;
-                filesHtml += `<h4 class="text-lg font-semibold text-gray-800 mb-3">Прикріплений файл - ${f.originalName} <span class="text-sm font-normal text-gray-500">(${(f.size / 1024).toFixed(1)} KB)</span></h4>`;
-                filesHtml += buttonsHtml;
+                // 2 & 3. Кнопки Відкрити та Завантажити (в один рядок)
+                const canUpload = (doc.status === 'draft' || doc.status === 'rejected') && user.role === 'employee';
+                filesHtml += `
+                    <div class="flex flex-row flex-wrap items-center gap-3 mb-6">
+                        <a href="${fileUrl}" target="_blank" class="px-6 py-2.5 text-sm font-medium rounded-md border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 flex items-center transition-colors shadow-sm w-fit whitespace-nowrap">
+                            <svg class="h-5 w-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                            Відкрити
+                        </a>
+                        <a href="${fileUrl}" download="${f.originalName}" class="px-6 py-2.5 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 flex items-center transition-colors shadow-sm w-fit whitespace-nowrap">
+                            <svg class="h-5 w-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                            Завантажити
+                        </a>
+                        ${canUpload ? `
+                        <button onclick="deleteFile('${f._id || f.id}')" class="px-6 py-2.5 text-sm font-medium rounded-md bg-red-600 text-white hover:bg-red-700 flex items-center transition-colors shadow-sm w-fit whitespace-nowrap ml-auto">
+                            <svg class="h-5 w-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            Видалити
+                        </button>
+                        ` : ''}
+                    </div>`;
 
-                if (['jpg', 'jpeg', 'png', 'gif'].includes(ext)) {
-                    filesHtml += `
-                        <div class="border border-gray-200 rounded-md bg-gray-50 shadow-sm overflow-hidden w-full flex justify-center p-2">
-                            <img src="${fileUrl}" class="max-w-full h-auto rounded-md" alt="${f.originalName}">
-                        </div>`;
+                // 4. ОКРЕМИЙ плейсхолдер для превью файлу
+                filesHtml += `<div class="w-full bg-gray-50 border border-gray-200 rounded-lg flex justify-center p-0 overflow-hidden">`;
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+                    filesHtml += `<img src="${fileUrl}" class="max-w-full h-auto object-contain max-h-[800px]" alt="${f.originalName}">`;
                 } else if (ext === 'pdf') {
-                    // navpanes=0 ховає ліву панель мініатюр
-                    // toolbar=1 показує верхню панель із зумом
-                    filesHtml += `
-                        <div class="border border-gray-200 rounded-md bg-gray-100 shadow-sm w-full h-[800px] flex flex-col">
-                            <iframe src="${fileUrl}#toolbar=1&navpanes=0&view=FitH" class="w-full flex-1 rounded-md bg-white" frameborder="0" allowfullscreen></iframe>
-                        </div>`;
+                    filesHtml += `<iframe src="${fileUrl}#toolbar=1&navpanes=0&view=FitH" class="w-full h-[800px] border-0" allowfullscreen></iframe>`;
                 } else {
                     filesHtml += `
-                        <div class="border rounded-md p-8 bg-gray-50 shadow-sm text-center">
-                            <p class="text-gray-500">Попередній перегляд недоступний для цього формату.</p>
+                        <div class="py-12 text-center w-full">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            <p class="mt-2 text-sm text-gray-500">Попередній перегляд недоступний для цього формату.</p>
                         </div>`;
                 }
-                filesHtml += `</div>`; // Закриваємо блок файлу
+                filesHtml += `</div>`; // Закриваємо область прев'ю
+                filesHtml += `</div>`; // Закриваємо загальний блок одного файлу (під ним буде margin і border-b)
             });
+            filesHtml += `</div>`; // Закриваємо flex flex-col w-full
         } else {
-            filesHtml += '<p class="text-gray-500 p-4 text-center border rounded-md bg-gray-50 mb-4">Файли відсутні. Ви можете завантажити їх нижче.</p>';
+            filesHtml += '<p class="text-gray-500 p-4 text-center border rounded-md bg-gray-50 mb-4">Файли відсутні.</p>';
         }
 
-        // Форма завантаження нових файлів (тільки для ініціатора в статусі draft або rejected)
+        // Додаємо прихований інпут для завантаження файлів (якщо є права)
         if ((doc.status === 'draft' || doc.status === 'rejected') && user.role === 'employee') {
-            filesHtml += `
-                <div class="mt-4 p-4 border border-dashed border-gray-300 rounded-md bg-white">
-                    <h4 class="text-sm font-medium text-gray-700 mb-2">Додати файли до документа</h4>
-                    <form id="uploadFilesForm" class="flex flex-col sm:flex-row sm:items-center space-y-3 sm:space-y-0 sm:space-x-4">
-                        <input type="file" id="newDocFiles" multiple class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" />
-                        <button type="submit" id="uploadFilesBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 whitespace-nowrap">Завантажити файли</button>
-                    </form>
-                    <div id="uploadError" class="hidden mt-2 text-sm text-red-600"></div>
-                </div>
-            `;
+            filesHtml += `<input type="file" id="hiddenFileInput" multiple class="hidden" />`;
         }
 
         viewerContainer.innerHTML = filesHtml;
 
-        // Додаємо обробник подій для форми завантаження
-        const uploadForm = document.getElementById('uploadFilesForm');
-        if (uploadForm) {
-            uploadForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const fileInput = document.getElementById('newDocFiles');
-                const errDiv = document.getElementById('uploadError');
-                const btn = document.getElementById('uploadFilesBtn');
-
-                errDiv.classList.add('hidden');
-                if (fileInput.files.length === 0) {
-                    errDiv.textContent = 'Оберіть хоча б один файл';
-                    errDiv.classList.remove('hidden');
-                    return;
-                }
+        // Обробник подій для прихованого інпуту
+        const hiddenInput = document.getElementById('hiddenFileInput');
+        if (hiddenInput) {
+            hiddenInput.addEventListener('change', async (e) => {
+                if (e.target.files.length === 0) return;
                 
-                if (fileInput.files.length + (doc.files ? doc.files.length : 0) > currentSettings.maxUploadFiles) {
-                    errDiv.textContent = `Ліміт завантаження: ${currentSettings.maxUploadFiles} файлів. Можна додати ще максимум ${currentSettings.maxUploadFiles - (doc.files ? doc.files.length : 0)}.`;
-                    errDiv.classList.remove('hidden');
+                if (e.target.files.length + (doc.files ? doc.files.length : 0) > currentSettings.maxUploadFiles) {
+                    window.API.showModal({ title: 'Помилка', message: `Ліміт завантаження: ${currentSettings.maxUploadFiles} файлів. Можна додати ще максимум ${currentSettings.maxUploadFiles - (doc.files ? doc.files.length : 0)}.` });
+                    hiddenInput.value = ''; // Скидаємо вибір
                     return;
                 }
 
-                btn.disabled = true;
-                btn.textContent = 'Завантаження...';
+                // Показуємо загальний лоадер під час завантаження
+                document.getElementById('loadingIndicator').classList.remove('hidden');
+                document.getElementById('docContent').classList.add('hidden');
+
                 const formData = new FormData();
-                for (let i = 0; i < fileInput.files.length; i++) {
-                    formData.append('files', fileInput.files[i]);
+                for (let i = 0; i < e.target.files.length; i++) {
+                    formData.append('files', e.target.files[i]);
                 }
 
                 try {
@@ -196,10 +211,9 @@ async function loadDocumentDetails() {
                     await loadDocumentDetails(); // Оновлюємо сторінку після успішного завантаження
                     await loadAuditTrail();
                 } catch (error) {
-                    errDiv.textContent = error.message;
-                    errDiv.classList.remove('hidden');
-                    btn.disabled = false;
-                    btn.textContent = 'Завантажити файли';
+                    window.API.showModal({ title: 'Помилка завантаження', message: error.message });
+                    document.getElementById('loadingIndicator').classList.add('hidden');
+                    document.getElementById('docContent').classList.remove('hidden');
                 }
             });
         }
@@ -335,6 +349,10 @@ function renderActionButtons(doc, user) {
         if (doc.status === 'draft') {
             actionContainer.appendChild(createBtn('🗑️ Видалити', 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 ml-auto', deleteDoc));
         }
+        if (doc.status === 'draft' || doc.status === 'rejected') {
+            const mlClass = doc.status === 'rejected' ? ' ml-auto' : ' ml-3';
+            actionContainer.appendChild(createBtn('📎 Додати файл(и)', 'bg-green-600 text-white hover:bg-green-700' + mlClass, () => document.getElementById('hiddenFileInput').click()));
+        }
     }
 
     // Manager Actions
@@ -436,6 +454,23 @@ async function loadAuditTrail() {
         console.error('Audit Load Error:', error);
     }
 }
+
+window.deleteFile = (fileId) => {
+    window.API.showModal({
+        title: 'Видалення файлу',
+        message: 'Ви впевнені, що хочете видалити цей прикріплений файл?',
+        type: 'confirm',
+        onConfirm: async () => {
+            try {
+                await window.API.fetchAPI(`/documents/${currentDocId}/files/${fileId}`, 'DELETE');
+                await loadDocumentDetails();
+                await loadAuditTrail();
+            } catch (error) {
+                window.API.showModal({ title: 'Помилка видалення', message: error.message });
+            }
+        }
+    });
+};
 
 // Modal Logic
 async function openDelegateModal() {

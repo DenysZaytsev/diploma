@@ -9,30 +9,35 @@ const {
   rejectDocument,
   signDocument,
   archiveDocument,
+  uploadFiles,
   getDocumentAudit,
   deleteDocument,
-  uploadFiles
+  deleteFile
 } = require('../controllers/documentController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
 
+// Створення документа (дозволяємо масив файлів, ліміт 30)
 router.route('/')
   .get(protect, getDocuments)
-  .post(protect, authorize('employee'), upload.array('files', 5), createDocument);
+  .post(protect, authorize('employee'), upload.array('files', 30), createDocument);
 
 router.route('/:id')
   .get(protect, getDocumentById)
-  .delete(protect, authorize('employee', 'admin'), deleteDocument);
+  .delete(protect, deleteDocument);
 
+// Робота з файлами
+router.post('/:id/files', protect, upload.array('files', 30), uploadFiles);
+router.delete('/:id/files/:fileId', protect, deleteFile);
+
+// Переходи статусів
 router.post('/:id/submit', protect, authorize('employee'), submitDocument);
 router.post('/:id/approve', protect, authorize('manager'), approveDocument);
 router.post('/:id/reject', protect, authorize('manager'), rejectDocument);
 router.post('/:id/sign', protect, authorize('signatory'), signDocument);
-router.post('/:id/archive', protect, authorize('manager', 'admin'), archiveDocument);
+router.post('/:id/archive', protect, archiveDocument);
 
-router.post('/:id/files', protect, authorize('employee'), upload.array('files', 5), uploadFiles);
-
-router.route('/:id/audit')
-  .get(protect, getDocumentAudit);
+// Audit Trail
+router.get('/:id/audit', protect, getDocumentAudit);
 
 module.exports = router;
