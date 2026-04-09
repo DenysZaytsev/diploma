@@ -23,9 +23,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     };
     document.getElementById('userRole').textContent = roleLabels[user.role] || user.role;
     
-    const initials = (user.fullName || 'U').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-    document.getElementById('userInitials').textContent = initials;
-
     // Form Submission
     const form = document.getElementById('newDocumentForm');
     

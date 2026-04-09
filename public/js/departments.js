@@ -18,9 +18,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const userNameEl = document.getElementById('userName');
     if(userNameEl) userNameEl.textContent = user.fullName || 'Admin';
-    const initials = (user.fullName || 'A').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-    const userInitialsEl = document.getElementById('userInitials');
-    if(userInitialsEl) userInitialsEl.textContent = initials;
 
     await loadDepartments();
 });

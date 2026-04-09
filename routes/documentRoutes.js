@@ -4,6 +4,8 @@ const {
   createDocument,
   getDocuments,
   getDocumentById,
+  updateDocument,
+  addComment,
   submitDocument,
   approveDocument,
   rejectDocument,
@@ -24,6 +26,7 @@ router.route('/')
 
 router.route('/:id')
   .get(protect, getDocumentById)
+  .patch(protect, authorize('employee'), updateDocument)
   .delete(protect, deleteDocument);
 
 // Робота з файлами
@@ -32,10 +35,13 @@ router.delete('/:id/files/:fileId', protect, deleteFile);
 
 // Переходи статусів
 router.post('/:id/submit', protect, authorize('employee'), submitDocument);
-router.post('/:id/approve', protect, authorize('manager'), approveDocument);
-router.post('/:id/reject', protect, authorize('manager'), rejectDocument);
+router.post('/:id/approve', protect, authorize('approver'), approveDocument);
+router.post('/:id/reject', protect, authorize('approver', 'signatory'), rejectDocument);
 router.post('/:id/sign', protect, authorize('signatory'), signDocument);
 router.post('/:id/archive', protect, archiveDocument);
+
+// Коментарі
+router.post('/:id/comments', protect, addComment);
 
 // Audit Trail
 router.get('/:id/audit', protect, getDocumentAudit);

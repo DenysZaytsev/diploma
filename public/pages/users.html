@@ -21,6 +21,7 @@
                 <div class="flex items-center space-x-4">
                     <div class="h-8 w-8 rounded-full bg-indigo-800 flex items-center justify-center text-white font-bold" id="userInitials"></div>
                     <span id="userName" class="text-white text-sm hidden sm:block"></span>
+                    <button onclick="window.API.openProfileSettings()" class="text-indigo-100 hover:text-white transition px-2" title="Налаштування профілю">⚙️</button>
                     <button onclick="window.API.logout()" class="bg-indigo-500 hover:bg-indigo-700 text-white px-3 py-2 rounded-md text-sm">Вийти</button>
                 </div>
             </div>
@@ -38,8 +39,8 @@
                 <select id="filterRole" class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 text-sm">
                     <option value="">Всі ролі</option>
                     <option value="admin">Адміністратор</option>
-                    <option value="manager">Менеджер</option>
-                    <option value="signatory">Підписант</option>
+                    <option value="approver">Керівник</option>
+                    <option value="signatory">Підписант (Signatory)</option>
                     <option value="employee">Працівник</option>
                 </select>
                 <select id="filterDepartment" class="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 text-sm">
@@ -92,9 +93,7 @@
                         <!-- Опції ролей будуть динамічно завантажуватися JS -->
                         <option value="employee">Працівник (Ініціатор)</option>
                         <!-- Якщо поточний користувач не SuperAdmin, опція "admin" буде прихована -->
-                        <option value="manager">Менеджер підрозділу</option>
-                        <option value="signatory">Підписант (Signatory)</option>
-                        <option value="manager">Менеджер підрозділу</option>
+                        <option value="approver">Керівник відділу</option>
                         <option value="signatory">Підписант (Signatory)</option>
                         <option value="admin">Адміністратор</option>
                     </select>

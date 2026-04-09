@@ -1,6 +1,9 @@
 const Document = require('../models/Document');
 const AuditLog = require('../models/AuditLog');
 const Settings = require('../models/Settings');
+const SystemAuditLog = require('../models/SystemAuditLog');
+const User = require('../models/User');
+const { sendSystemEmail } = require('../utils/emailService');
 
 const createAuditLog = async (documentId, userId, action, options = {}) => {
   await AuditLog.create({
@@ -11,6 +14,21 @@ const createAuditLog = async (documentId, userId, action, options = {}) => {
     toStatus: options.toStatus,
     comment: options.comment,
   });
+};
+
+const logSystemAction = async (user, action, targetEmail, details) => {
+    try {
+        await SystemAuditLog.create({
+            adminId: user._id,
+            adminName: user.fullName,
+            adminEmail: user.email,
+            action,
+            targetEmail,
+            details
+        });
+    } catch (err) {
+        console.error('System Audit Log Error:', err);
+    }
 };
 
 const createDocument = async (req, res) => {
@@ -60,17 +78,33 @@ const getDocuments = async (req, res) => {
   try {
     const filter = { isDeleted: false };
     
-    const { type, status, search, direction } = req.query;
+    const { type, status, search, direction, department, deadlineBefore, createdFrom, createdTo } = req.query;
 
     // Застосування фільтрів
     if (type) filter.type = type;
     if (direction) filter.direction = direction;
+    if (department) filter.department = department; // Користувачі з відповідними правами можуть фільтрувати по іншим відділам
 
-    // Пошук тексту (назва або контрагент)
+    if (deadlineBefore) filter.dueDate = { $lte: new Date(deadlineBefore) };
+
+    if (createdFrom || createdTo) {
+        filter.createdAt = {};
+        if (createdFrom) filter.createdAt.$gte = new Date(createdFrom);
+        if (createdTo) filter.createdAt.$lte = new Date(new Date(createdTo).setHours(23, 59, 59, 999));
+    }
+
+    // Пошук тексту (Назва, Контрагент, ID, Відповідальна особа)
     if (search) {
+      const matchingUsers = await User.find({ fullName: { $regex: search, $options: 'i' } }).select('_id');
+      const userIds = matchingUsers.map(u => u._id);
+
       filter.$or = [
+        { regNumber: { $regex: search, $options: 'i' } },
         { title: { $regex: search, $options: 'i' } },
-        { counterparty: { $regex: search, $options: 'i' } }
+        { counterparty: { $regex: search, $options: 'i' } },
+        { creator: { $in: userIds } },
+        { approver: { $in: userIds } },
+        { signatory: { $in: userIds } }
       ];
     }
     
@@ -78,15 +112,10 @@ const getDocuments = async (req, res) => {
     if (req.user.role === 'employee') {
       filter.creator = req.user._id;
       if (status) filter.status = status;
-    } else if (req.user.role === 'signatory') {
-      // Підписант бачить документи на підписанні ТІЛЬКИ свого відділу
-      filter.status = 'on_signing';
-      filter.department = req.user.department;
     } else {
-      // Для Approver та Admin
+      // Для Approver, Signatory та Admin
       if (status) filter.status = status;
-      // Погоджувач бачить документи тільки свого відділу
-      if (req.user.role === 'approver') filter.department = req.user.department;
+      // Вони бачать документи всіх відділів (прозорий реєстр). Фільтрація по відділу працює через req.query.department.
     }
 
     const documents = await Document.find(filter)
@@ -123,6 +152,56 @@ const getDocumentById = async (req, res) => {
   }
 };
 
+const updateDocument = async (req, res) => {
+  try {
+    const { title, counterparty, dueDate } = req.body;
+    const doc = await Document.findById(req.params.id);
+    
+    if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
+    if (doc.creator.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Denied' });
+    if (!['draft', 'rejected'].includes(doc.status)) return res.status(400).json({ message: 'Документ можна редагувати лише в статусі чернетки або коли його відхилено' });
+
+    let changes = [];
+    if (title && title !== doc.title) { changes.push('Назва'); doc.title = title; }
+    if (counterparty !== undefined && counterparty !== doc.counterparty) { changes.push('Контрагент'); doc.counterparty = counterparty; }
+    if (dueDate !== undefined) {
+        const newDate = dueDate ? new Date(dueDate) : null;
+        const oldDate = doc.dueDate ? new Date(doc.dueDate) : null;
+        if (newDate?.getTime() !== oldDate?.getTime()) {
+            changes.push('Дедлайн');
+            doc.dueDate = newDate;
+        }
+    }
+
+    await doc.save();
+    if (changes.length > 0) {
+        await createAuditLog(doc._id, req.user._id, 'update', { comment: `Оновлено поля: ${changes.join(', ')}` });
+    }
+    res.json(doc);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const addComment = async (req, res) => {
+  try {
+    const { comment } = req.body;
+    if (!comment) return res.status(400).json({ message: 'Коментар не може бути порожнім' });
+    
+    const doc = await Document.findById(req.params.id);
+    if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
+    
+    // Перевірка доступу (користувач повинен мати право переглядати цей документ)
+    if (req.user.role === 'employee' && doc.creator.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Access denied' });
+    if (['approver', 'signatory'].includes(req.user.role) && doc.department !== doc.department) return res.status(403).json({ message: 'Access denied' });
+
+    await createAuditLog(doc._id, req.user._id, 'comment', { comment });
+    res.json({ message: 'Коментар додано' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 const submitDocument = async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
@@ -134,7 +213,17 @@ const submitDocument = async (req, res) => {
     doc.status = 'on_approval';
     await doc.save();
 
+    await logSystemAction(req.user, 'Призначення документа', 'Керівник відділу', `Документ ${doc.regNumber} (${doc.title}) відправлено на погодження`);
     await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: oldStatus, toStatus: 'on_approval' });
+    
+    const docUrl = `${req.protocol}://${req.get('host')}/pages/document.html?id=${doc._id}`;
+
+    const approvers = await User.find({ role: 'approver', department: doc.department }).select('email notifications');
+    const emails = approvers.filter(a => a.notifications?.onNewTask !== false).map(a => a.email);
+    if (emails.length > 0) {
+        await sendSystemEmail(emails, 'Новий документ на погодження', `Документ <b>${doc.title}</b> (${doc.regNumber}) очікує на ваше погодження у системі EDMS.<br><br><a href="${docUrl}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Переглянути документ</a>`);
+    }
+    
     res.json(doc);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -146,13 +235,26 @@ const approveDocument = async (req, res) => {
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
     if (doc.status !== 'on_approval') return res.status(400).json({ message: 'Document must be on approval' });
+    if (req.user.role === 'approver' && doc.department !== req.user.department) {
+        return res.status(403).json({ message: 'Ви можете погоджувати документи лише свого відділу' });
+    }
 
     // Автоматичний перехід approved -> on_signing
     doc.status = 'on_signing';
     doc.approver = req.user._id;
     await doc.save();
 
+    await logSystemAction(req.user, 'Призначення документа', 'Підписант', `Документ ${doc.regNumber} (${doc.title}) погоджено та передано на підписання`);
     await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'on_approval', toStatus: 'on_signing', comment: 'Погоджено. Автоматично передано на підписання.' });
+    
+    const docUrl = `${req.protocol}://${req.get('host')}/pages/document.html?id=${doc._id}`;
+
+    const signatories = await User.find({ role: 'signatory', department: doc.department }).select('email notifications');
+    const emails = signatories.filter(s => s.notifications?.onNewTask !== false).map(s => s.email);
+    if (emails.length > 0) {
+        await sendSystemEmail(emails, 'Документ очікує на підпис', `Документ <b>${doc.title}</b> (${doc.regNumber}) було погоджено керівником і тепер очікує на ваш електронний підпис.<br><br><a href="${docUrl}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Переглянути документ</a>`);
+    }
+    
     res.json(doc);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -167,15 +269,31 @@ const rejectDocument = async (req, res) => {
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
     if (!['on_approval', 'on_signing'].includes(doc.status)) return res.status(400).json({ message: 'Document must be on approval or on signing' });
+    if (req.user.role === 'approver' && doc.department !== req.user.department) {
+        return res.status(403).json({ message: 'Ви можете відхиляти документи лише свого відділу' });
+    }
 
     const oldStatus = doc.status;
     doc.status = 'rejected';
     
     if (oldStatus === 'on_approval') doc.approver = req.user._id;
     if (oldStatus === 'on_signing') doc.signatory = req.user._id;
+    
+    const docWithPopulated = await Document.findById(doc._id).populate('creator', 'email notifications');
+    const targetEmail = docWithPopulated.creator ? docWithPopulated.creator.email : 'Ініціатор';
+
     await doc.save();
 
+    await logSystemAction(req.user, 'Призначення документа', targetEmail, `Документ ${doc.regNumber} (${doc.title}) відхилено та повернуто ініціатору`);
     await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: oldStatus, toStatus: 'rejected', comment });
+    
+    const docUrl = `${req.protocol}://${req.get('host')}/pages/document.html?id=${doc._id}`;
+
+    // Сповіщаємо тільки ініціатора, якому потрібно виправити документ
+    if (docWithPopulated.creator && docWithPopulated.creator.email && docWithPopulated.creator.notifications?.onStatusChange !== false) {
+        await sendSystemEmail(docWithPopulated.creator.email, 'Документ відхилено', `Документ <b>${doc.title}</b> (${doc.regNumber}) було відхилено.<br><br><b>Причина:</b> ${comment}<br><br>Будь ласка, виправте зауваження та відправте документ повторно.<br><br><a href="${docUrl}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Переглянути документ</a>`);
+    }
+    
     res.json(doc);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -192,7 +310,19 @@ const signDocument = async (req, res) => {
     doc.signatory = req.user._id;
     await doc.save();
     
+    await logSystemAction(req.user, 'Призначення документа', 'Архів / Система', `Документ ${doc.regNumber} (${doc.title}) успішно підписано КЕП`);
     await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'on_signing', toStatus: 'signed', comment: 'Накладено КЕП' });
+    
+    const docUrl = `${req.protocol}://${req.get('host')}/pages/document.html?id=${doc._id}`;
+
+    const docWithPopulated = await Document.findById(doc._id).populate('creator', 'email notifications').populate('approver', 'email notifications');
+    if (docWithPopulated.creator && docWithPopulated.creator.email && docWithPopulated.creator.notifications?.onStatusChange !== false) {
+        await sendSystemEmail(docWithPopulated.creator.email, 'Документ успішно підписано', `Ваш документ <b>${doc.title}</b> (${doc.regNumber}) було успішно підписано.<br><br><a href="${docUrl}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Переглянути документ</a>`);
+    }
+    if (docWithPopulated.approver && docWithPopulated.approver.email && docWithPopulated.approver.notifications?.onStatusChange !== false) {
+        await sendSystemEmail(docWithPopulated.approver.email, 'Документ успішно підписано', `Документ <b>${doc.title}</b> (${doc.regNumber}), який ви погодили, було успішно підписано КЕП. Тепер ви можете перемістити його до архіву.<br><br><a href="${docUrl}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Переглянути документ</a>`);
+    }
+    
     res.json(doc);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -209,6 +339,14 @@ const archiveDocument = async (req, res) => {
     await doc.save();
     
     await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'signed', toStatus: 'archived' });
+    
+    const docUrl = `${req.protocol}://${req.get('host')}/pages/document.html?id=${doc._id}`;
+    const docWithPopulated = await Document.findById(doc._id).populate('creator', 'email notifications');
+    
+    if (docWithPopulated.creator && docWithPopulated.creator.email && docWithPopulated.creator.notifications?.onStatusChange !== false) {
+        await sendSystemEmail(docWithPopulated.creator.email, 'Документ переміщено в архів', `Життєвий цикл документа <b>${doc.title}</b> (${doc.regNumber}) успішно завершено. Документ переміщено в архів.<br><br><a href="${docUrl}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Переглянути документ</a>`);
+    }
+    
     res.json(doc);
   } catch (error) {
     res.status(500).json({ message: 'Server error' });
@@ -306,6 +444,8 @@ module.exports = {
   createDocument,
   getDocuments,
   getDocumentById,
+  updateDocument,
+  addComment,
   submitDocument,
   approveDocument,
   rejectDocument,

@@ -24,10 +24,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const userRoleEl = document.getElementById('userRole');
     if(userNameEl) userNameEl.textContent = user.fullName || 'Admin';
     if(userRoleEl) userRoleEl.textContent = 'admin';
-    
-    const initials = (user.fullName || 'A').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-    const userInitialsEl = document.getElementById('userInitials');
-    if(userInitialsEl) userInitialsEl.textContent = initials;
 
     // Сховати меню документів
     ['navRegistry', 'navNewDoc'].forEach(id => {
@@ -65,6 +61,7 @@ async function loadUsers() {
 
         if (users.length === 0) {
             tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center">Користувачів не знайдено</td></tr>';
+            document.getElementById('paginationControls').innerHTML = '';
             return;
         }
 
@@ -109,6 +106,11 @@ function renderTablePage() {
                 roleBadgeClass = 'bg-indigo-700 text-white shadow-sm';
             }
 
+            const listInitials = (u.fullName || 'U').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+            const avatarHtml = u.avatar 
+                ? `<img src="${window.API.API_BASE_URL.replace('/api', '')}${u.avatar}" class="w-8 h-8 rounded-full object-cover border border-gray-200">`
+                : `<div class="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700">${listInitials}</div>`;
+
             const statusBadge = u.isBlocked 
                 ? '<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Заблокований</span>'
                 : '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Активний</span>';
@@ -140,7 +142,8 @@ function renderTablePage() {
                 canChangePassword = true; // Admin може міняти тільки не-адмінам
             }
 
-            if (canChangePassword && !isSelf) {
+            // Якщо є права на зміну пароля - завжди показуємо кнопку (для SuperAdmin це всі юзери)
+            if (canChangePassword) {
                 actionButtons += `<button onclick="event.stopPropagation(); openChangePasswordModal('${u._id || u.id}')" class="text-indigo-600 hover:text-indigo-900 mx-2">Пароль</button>`;
             }
             
@@ -163,7 +166,12 @@ function renderTablePage() {
             };
 
             tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-normal break-words font-medium text-gray-900 w-1/4">${u.fullName}</td>
+                <td class="px-6 py-4 whitespace-normal break-words font-medium text-gray-900 w-1/4">
+                    <div class="flex items-center space-x-3">
+                        ${avatarHtml}
+                        <span>${u.fullName}</span>
+                    </div>
+                </td>
                 <td class="px-6 py-4 whitespace-normal break-words text-gray-500 w-1/4">${u.email}</td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <span class="px-2 py-1 text-xs font-medium rounded flex items-center w-fit ${roleBadgeClass}">${displayedRole}</span>
@@ -348,6 +356,8 @@ window.openEditUserModal = (id) => {
         roleDisplaySpan.style.display = 'block';
         roleSelect.disabled = true; // Заборонити зміну
         roleSelect.classList.add('bg-gray-100', 'cursor-not-allowed'); // Візуально показати, що неактивно
+        roleSelect.innerHTML = `<option value="${user.role}">${user.role}</option>`;
+        roleSelect.value = user.role;
     } else {
         roleSelect.style.display = 'block'; // Показуємо select
         roleDisplaySpan.style.display = 'none'; // Приховуємо текст
@@ -406,13 +416,17 @@ window.updateUser = async (e) => {
 
     const id = document.getElementById('editUserId').value;
     
+    const payload = {
+        fullName: document.getElementById('editFullName').value,
+        email: document.getElementById('editEmail').value,
+        department: document.getElementById('editDepartment').value
+    };
+    
+    const roleVal = document.getElementById('editRole').value;
+    if (roleVal) payload.role = roleVal;
+
     try {
-        await window.API.fetchAPI(`/users/${id}`, 'PATCH', {
-            fullName: document.getElementById('editFullName').value,
-            email: document.getElementById('editEmail').value,
-            role: document.getElementById('editRole').value,
-            department: document.getElementById('editDepartment').value
-        });
+        await window.API.fetchAPI(`/users/${id}`, 'PATCH', payload);
         closeEditUserModal();
         loadUsers();
     } catch (error) {

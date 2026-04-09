@@ -7,4 +7,6 @@ router.route('/')
   .get(protect, getSettings)
   .patch(protect, authorize('admin'), updateSettings);
 
+router.post('/test-email', protect, authorize('admin'), require('../controllers/settingsController').testEmail);
+
 module.exports = router;

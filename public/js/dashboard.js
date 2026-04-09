@@ -25,9 +25,22 @@ document.addEventListener('DOMContentLoaded', async () => {
         userRoleEl.className = `px-2 py-0.5 text-xs font-medium rounded-full inline-block mt-1 ${roleColors[user.role] || 'bg-gray-100 text-gray-800'}`;
     }
     
-    // Set initials
-    const initials = (user.fullName || 'U').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-    document.getElementById('userInitials').textContent = initials;
+    // Додаємо посилання на Адмін-панель для Адміністратора
+    if (user.role === 'admin') {
+        const nav = document.querySelector('aside nav');
+        if (nav) {
+            nav.insertAdjacentHTML('beforeend', `<a href="/pages/users.html" class="block px-4 py-2 mt-4 bg-red-900/50 text-red-200 hover:bg-red-800/50 rounded-md transition-colors">⚙️ Адмін-панель</a>`);
+        }
+    }
+
+    // Показуємо кнопки "Новий документ" ТІЛЬКИ для Employee (приховані по замовчуванню в HTML)
+    if (user.role === 'employee') {
+        const createLinks = document.querySelectorAll('a[href*="new-document"], #navNewDoc, #headerNewDocBtn');
+        createLinks.forEach(el => {
+            el.classList.remove('hidden');
+            el.style.display = '';
+        });
+    }
 
     // Date
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -47,19 +60,25 @@ async function fetchStats() {
     try {
         const stats = await window.API.fetchAPI('/stats');
         
-        document.getElementById('statTotal').textContent = stats.totalDocs;
-        
-        const statInc = document.getElementById('statIncoming');
-        if(statInc) { statInc.textContent = stats.incomingDocs || 0; statInc.previousElementSibling.textContent = 'Вхідні'; }
-        
-        const statOut = document.getElementById('statOutgoing');
-        if(statOut) { statOut.textContent = stats.outgoingDocs || 0; statOut.previousElementSibling.textContent = 'Вихідні'; }
-        
-        const statInP = document.getElementById('statInProgress');
-        if(statInP) { statInP.textContent = stats.inProgressDocs || 0; statInP.previousElementSibling.textContent = 'На підписанні'; }
-        
-        const statOver = document.getElementById('statOverdue');
-        if(statOver) { statOver.textContent = stats.underReviewDocs || 0; statOver.previousElementSibling.textContent = 'На погодженні'; }
+        // Знаходимо контейнер з плитками і динамічно його перебудовуємо
+        const totalEl = document.getElementById('statTotal');
+        if (totalEl) {
+            const grid = totalEl.closest('.grid');
+            if (grid) {
+                grid.className = 'grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-8';
+                grid.innerHTML = `
+                    <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">Всього документів</dt><dd class="mt-1 text-3xl font-semibold text-gray-900">${stats.totalDocs}</dd></div></div>
+                    <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">В роботі (Активні)</dt><dd class="mt-1 text-3xl font-semibold text-blue-600">${stats.inProgressDocs}</dd></div></div>
+                    <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">Вхідні / Вихідні / Внутр.</dt><dd class="mt-1 text-xl font-semibold text-gray-800 mt-2">${stats.incomingDocs || 0} / ${stats.outgoingDocs || 0} / ${stats.internalDocs || 0}</dd></div></div>
+                    <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">Чернетки</dt><dd class="mt-1 text-2xl font-semibold text-gray-600">${stats.statusDraft}</dd></div></div>
+                    <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">На погодженні</dt><dd class="mt-1 text-2xl font-semibold text-yellow-600">${stats.statusOnApproval}</dd></div></div>
+                    <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">На підписанні</dt><dd class="mt-1 text-2xl font-semibold text-indigo-600">${stats.statusOnSigning}</dd></div></div>
+                    <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">Підписано</dt><dd class="mt-1 text-2xl font-semibold text-green-600">${stats.statusSigned}</dd></div></div>
+                    <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">Відхилено</dt><dd class="mt-1 text-2xl font-semibold text-red-600">${stats.statusRejected}</dd></div></div>
+                    <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">В архіві</dt><dd class="mt-1 text-2xl font-semibold text-gray-400">${stats.statusArchived}</dd></div></div>
+                `;
+            }
+        }
     } catch (error) {
         console.error('Error fetching stats:', error);
     }
@@ -67,7 +86,15 @@ async function fetchStats() {
 
 async function fetchRecentDocuments() {
     try {
-        const documents = await window.API.fetchAPI('/documents');
+        const user = window.API.getUser();
+        let query = '';
+        
+        // Для Керівників та Підписантів на дашборді показуємо ТІЛЬКИ їхній відділ
+        if (user.role === 'approver' || user.role === 'signatory') {
+            query = `?department=${encodeURIComponent(user.department)}`;
+        }
+
+        const documents = await window.API.fetchAPI(`/documents${query}`);
         const tbody = document.getElementById('recentDocsTable');
         
         tbody.innerHTML = ''; // Clear loading
@@ -85,6 +112,7 @@ async function fetchRecentDocuments() {
         if (thead) {
             thead.innerHTML = `<tr>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Створено</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">Назва</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Тип</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Відділ</th>
@@ -163,9 +191,12 @@ async function fetchRecentDocuments() {
                     deadlineClass = 'text-red-600 font-semibold';
                 }
             }
+            
+            const createdDate = new Date(doc.createdAt).toLocaleDateString('uk-UA');
 
             tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${doc.regNumber || '—'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${createdDate}</td>
                 <td class="px-6 py-4 whitespace-normal break-words font-medium text-gray-900">${doc.title}</td>
                 <td class="px-6 py-4 whitespace-nowrap">
                     <span class="block text-xs font-semibold text-gray-500 mb-1">${directionText}</span>

@@ -25,8 +25,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         userRoleEl.textContent = roleLabels[user.role] || user.role;
         userRoleEl.className = `px-2 py-0.5 text-xs font-medium rounded-full inline-block mt-1 ${roleColors[user.role] || 'bg-gray-100 text-gray-800'}`;
     }
-    const initials = (user.fullName || 'U').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-    document.getElementById('userInitials').textContent = initials;
 
     // Block Admin from reading document content
     if (user.role === 'admin') {
@@ -224,6 +222,8 @@ async function loadDocumentDetails() {
                     window.API.showModal({ title: 'Помилка завантаження', message: error.message });
                     document.getElementById('loadingIndicator').classList.add('hidden');
                     document.getElementById('docContent').classList.remove('hidden');
+                } finally {
+                    e.target.value = ''; // Скидаємо інпут для можливості повторного вибору
                 }
             });
         }
@@ -364,11 +364,14 @@ function renderActionButtons(doc, user) {
         if (doc.status === 'draft' || doc.status === 'rejected') {
             const mlClass = doc.status === 'rejected' ? ' ml-auto' : ' ml-3';
             actionContainer.appendChild(createBtn('📎 Додати файл(и)', 'bg-green-600 text-white hover:bg-green-700' + mlClass, () => document.getElementById('hiddenFileInput').click()));
+            
+            actionContainer.appendChild(createBtn('✏️ Редагувати', 'bg-orange-50 text-orange-600 border border-orange-200 hover:bg-orange-100 ml-3', () => openEditDocModal(doc)));
         }
     }
 
     // Approver Actions
-    if (user.role === 'approver') {
+    // Керівник може здійснювати дії ТІЛЬКИ з документами свого відділу
+    if (user.role === 'approver' && doc.department === user.department) {
         if (doc.status === 'on_approval') { 
             actionContainer.appendChild(createBtn('✅ Погодити', 'bg-green-600 text-white hover:bg-green-700', () => 
                 performActionWithConfirm('approve', 'Погодження', 'Погодити документ та передати його на підписання?')
@@ -391,7 +394,7 @@ function renderActionButtons(doc, user) {
     }
 
     // Signatory Actions
-    if (user.role === 'signatory' && doc.signatory && doc.signatory._id === user.id) { // Тільки якщо він є підписантом цього документа
+    if (user.role === 'signatory' && doc.department === user.department) { // Підписант свого відділу може підписувати
         if (doc.status === 'on_signing') { // Підписант підписує документ
             actionContainer.appendChild(createBtn('✍️ Підписати (КЕП)', 'bg-indigo-600 text-white hover:bg-indigo-700', () => 
                 performActionWithConfirm('sign', 'Підписання', 'Накласти електронний підпис на цей документ?')
@@ -412,6 +415,16 @@ function renderActionButtons(doc, user) {
     if (doc.status === 'archived' && user.role !== 'admin') {
         actionContainer.appendChild(createBtn('📥 Експорт паспорта (JSON)', 'bg-gray-800 text-white hover:bg-gray-900', exportArchive));
     }
+
+    // Кнопка для коментування (доступна всім на будь-якому етапі)
+    actionContainer.appendChild(createBtn('💬 Коментар', 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200 ml-3', () => {
+        window.API.showModal({
+            title: 'Додати коментар',
+            message: 'Введіть ваш коментар до документа (його побачать інші учасники в історії):',
+            type: 'prompt',
+            onConfirm: (comment) => performAction('comments', { comment })
+        });
+    }));
 
     if (!hasActions) {
         actionContainer.innerHTML = '<span class="text-sm text-gray-500 italic">Немає доступних дій</span>';
@@ -437,14 +450,22 @@ async function loadAuditTrail() {
             if (log.action === 'create') iconHtml = '✨';
             if (log.action === 'status_change') iconHtml = '🔄';
             if (log.action === 'file_upload') iconHtml = '📎';
+            if (log.action === 'update') iconHtml = '✏️';
+            if (log.action === 'comment') iconHtml = '💬';
             
             let detailsText = '';
             if (log.action === 'create') detailsText = 'Документ створено (Чернетка)';
             else if (log.action === 'status_change') detailsText = `Статус змінено: <span class="font-medium uppercase">${log.fromStatus}</span> ➔ <span class="font-medium uppercase">${log.toStatus}</span>`;
             else if (log.action === 'file_upload') detailsText = 'Завантажено файли до документа';
             else if (log.action === 'delete') detailsText = 'Документ видалено';
+            else if (log.action === 'update') detailsText = 'Документ відредаговано';
+            else if (log.action === 'comment') detailsText = 'Додано коментар';
             
-            if (log.comment) detailsText += ` <div class="mt-1 text-sm bg-gray-50 p-2 rounded border border-gray-200"><span class="font-medium text-gray-700">Коментар:</span> ${log.comment}</div>`;
+            if (log.comment) {
+                // Захист від XSS ін'єкцій у коментарях
+                const escapedComment = log.comment.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                detailsText += ` <div class="mt-1 text-sm bg-gray-50 p-2 rounded border border-gray-200"><span class="font-medium text-gray-700">Коментар:</span> ${escapedComment}</div>`;
+            }
 
             const li = document.createElement('li');
             li.innerHTML = `
@@ -516,3 +537,52 @@ async function openDelegateModal() {
 function closeDelegateModal() {
     document.getElementById('delegateModal').classList.add('hidden');
 }
+
+// Логіка модального вікна редагування метаданих
+window.openEditDocModal = (doc) => {
+    const existing = document.getElementById('editDocModal');
+    if (existing) existing.remove();
+
+    const modalHtml = `
+    <div id="editDocModal" class="fixed inset-0 bg-gray-900 bg-opacity-50 overflow-y-auto h-full w-full z-[100] flex items-center justify-center transition-opacity">
+        <div class="relative p-6 w-full max-w-md shadow-xl rounded-xl bg-white">
+            <h3 class="text-lg font-bold text-gray-900 mb-4">Редагувати документ</h3>
+            <form id="editDocForm">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Назва</label>
+                    <input type="text" id="editDocTitle" required value="${(doc.title || '').replace(/"/g, '&quot;')}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Контрагент</label>
+                    <input type="text" id="editDocCounterparty" value="${(doc.counterparty || '').replace(/"/g, '&quot;')}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Дедлайн</label>
+                    <input type="date" id="editDocDueDate" value="${doc.dueDate ? doc.dueDate.split('T')[0] : ''}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500">
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="document.getElementById('editDocModal').remove()" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 text-sm font-medium">Скасувати</button>
+                    <button type="submit" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium">Зберегти</button>
+                </div>
+            </form>
+        </div>
+    </div>`;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    document.getElementById('editDocForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const title = document.getElementById('editDocTitle').value;
+        const counterparty = document.getElementById('editDocCounterparty').value;
+        const dueDate = document.getElementById('editDocDueDate').value;
+        
+        try {
+            await window.API.fetchAPI(`/documents/${currentDocId}`, 'PATCH', { title, counterparty, dueDate });
+            document.getElementById('editDocModal').remove();
+            await loadDocumentDetails();
+            await loadAuditTrail();
+        } catch (error) {
+            window.API.showModal({ title: 'Помилка', message: error.message });
+        }
+    });
+};

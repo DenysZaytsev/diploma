@@ -9,25 +9,25 @@
         body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body class="bg-gray-100 min-h-screen flex">
+<body class="bg-gray-100 h-screen flex overflow-hidden">
 
     <!-- Sidebar -->
-    <aside class="w-64 bg-slate-900 text-white flex flex-col">
+    <aside id="mainSidebar" class="w-64 flex-shrink-0 bg-slate-900 text-white flex flex-col transition-all duration-300 z-40 relative">
         <div class="h-16 flex items-center justify-center border-b border-slate-800">
             <h1 class="text-xl font-bold tracking-wider">Mini-EDMS</h1>
         </div>
-        <nav class="flex-1 px-4 py-6 space-y-2">
+        <nav class="flex-1 overflow-y-auto px-4 py-6 space-y-2">
             <a href="/pages/dashboard.html" class="block px-4 py-2 hover:bg-slate-800 rounded-md transition-colors">
                 Дашборд
             </a>
             <a href="/pages/registry.html" class="block px-4 py-2 bg-blue-600 rounded-md transition-colors">
                 Журнал документів
             </a>
-            <a href="/pages/new-document.html" class="block px-4 py-2 hover:bg-slate-800 rounded-md transition-colors" id="navNewDoc">
+            <a href="/pages/new-document.html" class="block px-4 py-2 hover:bg-slate-800 rounded-md transition-colors hidden" id="navNewDoc">
                 Новий документ
             </a>
         </nav>
-        <div class="p-4 border-t border-slate-800">
+        <div class="p-4 border-t border-slate-800 flex-shrink-0 bg-slate-900">
             <div class="flex items-center space-x-3 mb-4">
                 <div class="w-8 h-8 rounded-full bg-slate-600 flex items-center justify-center text-sm font-bold" id="userInitials">
                     -
@@ -37,6 +37,9 @@
                     <p class="text-xs text-slate-400 capitalize" id="userRole">Role</p>
                 </div>
             </div>
+            <button onclick="window.API.openProfileSettings()" class="w-full mb-2 py-2 px-4 border border-slate-600 text-slate-300 rounded-md text-sm hover:bg-slate-700 transition-colors flex items-center justify-center">
+                <span class="mr-2">⚙️</span> Налаштування
+            </button>
             <button onclick="window.API.logout()" class="w-full py-2 px-4 border border-slate-700 rounded-md text-sm hover:bg-slate-800 transition-colors">
                 Вийти
             </button>
@@ -45,10 +48,18 @@
 
     <!-- Main Content -->
     <main class="flex-1 flex flex-col overflow-hidden">
-        <header class="h-16 bg-white shadow-sm flex items-center justify-between px-8">
-            <h2 class="text-xl font-semibold text-gray-800">Журнал реєстрації документів</h2>
+        <header class="h-16 flex-shrink-0 bg-white shadow-sm flex items-center justify-between px-4 sm:px-8">
+            <div class="flex items-center">
+                <button id="sidebarToggleBtn" class="mr-4 text-gray-500 hover:text-gray-700 focus:outline-none">
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                </button>
+                <h2 class="text-xl font-semibold text-gray-800 truncate">Журнал реєстрації документів</h2>
+            </div>
             <div class="flex items-center space-x-4">
-                <button onclick="window.location.href='/pages/new-document.html'" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none" id="headerNewDocBtn">
+                <button id="exportCsvBtn" class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-green-700 transition">
+                    Експорт (CSV)
+                </button>
+                <button onclick="window.location.href='/pages/new-document.html'" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none hidden" id="headerNewDocBtn">
                     + Зареєструвати
                 </button>
             </div>
@@ -56,36 +67,57 @@
 
         <div class="flex-1 overflow-auto p-8 flex flex-col">
             
-            <!-- Filters -->
-            <div class="bg-white p-4 rounded-lg shadow-sm mb-6 flex flex-wrap gap-4 items-end border border-gray-200">
-                <div class="flex-1 min-w-[200px]">
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Пошук</label>
-                    <input type="text" id="searchInput" placeholder="Пошук за номером, темою..." class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+            <!-- Розширений блок фільтрів -->
+            <div class="bg-gray-50 p-4 rounded-md border border-gray-200 mb-6 space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Пошук (ID, Назва, Відповідальний)</label>
+                        <input type="text" id="searchInput" placeholder="Пошук..." class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Відділ</label>
+                        <select id="deptFilter" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500">
+                            <option value="">Всі відділи</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Тип документа</label>
+                        <select id="typeFilter" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500">
+                            <option value="">Всі типи</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Вид (Напрямок)</label>
+                        <select id="directionFilter" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500">
+                            <option value="">Всі види</option>
+                            <option value="incoming">Вхідний</option>
+                            <option value="outgoing">Вихідний</option>
+                            <option value="internal">Внутрішній</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Статус</label>
+                        <select id="statusFilter" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500">
+                            <option value="">Всі статуси</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Дедлайн до</label>
+                        <input type="date" id="deadlineBefore" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Створено з</label>
+                        <input type="date" id="createdFrom" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Створено по</label>
+                        <input type="date" id="createdTo" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-indigo-500">
+                    </div>
                 </div>
-                <div class="w-48">
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Тип документа</label>
-                    <select id="typeFilter" class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border bg-white">
-                        <option value="">Всі типи</option>
-                        <option value="Incoming">Вхідні</option>
-                        <option value="Outgoing">Вихідні</option>
-                        <option value="Internal">Внутрішні</option>
-                    </select>
+                <div class="flex justify-end space-x-2">
+                    <button id="applyFiltersBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm hover:bg-indigo-700 font-medium transition">Застосувати</button>
+                    <button id="resetFiltersBtn" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-md text-sm hover:bg-gray-300 font-medium transition">Скинути</button>
                 </div>
-                <div class="w-48">
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Статус</label>
-                    <select id="statusFilter" class="w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border bg-white">
-                        <option value="">Всі статуси</option>
-                        <option value="Draft">Чернетка</option>
-                        <option value="Registered">Зареєстровано</option>
-                        <option value="Review">На розгляді</option>
-                        <option value="InProgress">В роботі</option>
-                        <option value="Executed">Виконано</option>
-                        <option value="Archived">В архіві</option>
-                    </select>
-                </div>
-                <button id="applyFiltersBtn" class="px-4 py-2 bg-gray-800 text-white text-sm font-medium rounded-md shadow-sm hover:bg-gray-900 h-10">
-                    Застосувати
-                </button>
             </div>
 
             <!-- Documents Table -->
@@ -94,19 +126,21 @@
                     <table class="min-w-full text-left text-sm text-gray-600">
                         <thead class="bg-gray-50 text-gray-700 sticky top-0 z-10">
                             <tr>
-                                <th class="px-6 py-3 font-medium border-b">Реєстр. номер</th>
-                                <th class="px-6 py-3 font-medium border-b">Тип</th>
-                                <th class="px-6 py-3 font-medium border-b">Тема документа</th>
-                                <th class="px-6 py-3 font-medium border-b">Кореспондент</th>
-                                <th class="px-6 py-3 font-medium border-b">Статус</th>
-                                <th class="px-6 py-3 font-medium border-b">Виконавець</th>
-                                <th class="px-6 py-3 font-medium border-b">Дедлайн</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Створено</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">Назва</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Тип</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Відділ</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/4">Контрагент</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Статус</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Відповідальний</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Дедлайн</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-200 bg-white" id="documentsTableBody">
                             <!-- Dynamic Content -->
                             <tr>
-                                <td colspan="7" class="px-6 py-10 text-center text-gray-500">Завантаження бази документів...</td>
+                                <td colspan="9" class="px-6 py-10 text-center text-gray-500">Завантаження бази документів...</td>
                             </tr>
                         </tbody>
                     </table>

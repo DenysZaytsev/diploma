@@ -29,27 +29,21 @@ document.addEventListener('DOMContentLoaded', () => {
         userRoleEl.className = `px-2 py-0.5 text-xs font-medium rounded-full inline-block mt-1 ${roleColors[user.role] || 'bg-gray-100 text-gray-800'}`;
     }
     
-    const initials = (user.fullName || 'U').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-    document.getElementById('userInitials').textContent = initials;
-
-    // Prevent Admin from viewing document registry
+    // Додаємо посилання на Адмін-панель для Адміністратора в бокове меню
     if (user.role === 'admin') {
-        window.API.showModal({
-            title: 'Інформація',
-            message: 'Перенаправлення в панель адміністратора...',
-            type: 'alert',
-            onConfirm: () => window.location.href = '/pages/users.html'
-        });
-        return;
+        const nav = document.querySelector('aside nav');
+        if (nav) {
+            nav.insertAdjacentHTML('beforeend', `<a href="/pages/users.html" class="block px-4 py-2 mt-4 bg-red-900/50 text-red-200 hover:bg-red-800/50 rounded-md transition-colors">⚙️ Адмін-панель</a>`);
+        }
     }
     
-    // Приховуємо кнопку створення документа та меню для не-контракторів
-    if (user.role !== 'employee') {
-        const navNewDoc = document.getElementById('navNewDoc');
-        if (navNewDoc) navNewDoc.style.display = 'none';
-        // Приховуємо загальну кнопку "Створити", якщо вона є у HTML реєстру
-        const createBtn = document.getElementById('btnCreateDocument');
-        if (createBtn) createBtn.style.display = 'none';
+    // Показуємо кнопки "Новий документ" ТІЛЬКИ для Employee (приховані по замовчуванню в HTML)
+    if (user.role === 'employee') {
+        const createLinks = document.querySelectorAll('a[href*="new-document"], #navNewDoc, #headerNewDocBtn');
+        createLinks.forEach(el => {
+            el.classList.remove('hidden');
+            el.style.display = '';
+        });
     }
 
     // Оновлюємо фільтр статусів правильними системними значеннями
@@ -67,11 +61,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     fetchDocumentTypes();
+    fetchDepartments();
+    
     // Filters event listener
-    document.getElementById('applyFiltersBtn').addEventListener('click', fetchDocuments);
-    document.getElementById('searchInput').addEventListener('keyup', (e) => {
+    document.getElementById('applyFiltersBtn')?.addEventListener('click', fetchDocuments);
+    document.getElementById('resetFiltersBtn')?.addEventListener('click', () => {
+        const fields = ['searchInput', 'typeFilter', 'statusFilter', 'deptFilter', 'directionFilter', 'deadlineBefore', 'createdFrom', 'createdTo'];
+        fields.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '';
+        });
+        fetchDocuments();
+    });
+    document.getElementById('searchInput')?.addEventListener('keyup', (e) => {
         if(e.key === 'Enter') fetchDocuments();
     });
+    
+    // Додаємо обробник для кнопки експорту
+    document.getElementById('exportCsvBtn')?.addEventListener('click', exportToCSV);
 
     // Initial fetch
     fetchDocuments();
@@ -91,20 +98,42 @@ async function fetchDocumentTypes() {
     }
 }
 
+async function fetchDepartments() {
+    try {
+        const deps = await window.API.fetchAPI('/departments');
+        const deptFilter = document.getElementById('deptFilter');
+        if (deptFilter) {
+            deptFilter.innerHTML = '<option value="">Всі відділи</option>' + deps.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+        }
+    } catch (error) {
+        console.error('Не вдалося завантажити відділи', error);
+    }
+}
+
 async function fetchDocuments() {
     const tbody = document.getElementById('documentsTableBody');
     tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-10 text-center text-gray-500">Завантаження...</td></tr>';
 
     try {
         // Build query string based on filters
-        const typeFilter = document.getElementById('typeFilter').value;
-        const statusFilter = document.getElementById('statusFilter').value;
-        const searchInput = document.getElementById('searchInput').value.trim();
+        const typeFilter = document.getElementById('typeFilter')?.value;
+        const statusFilter = document.getElementById('statusFilter')?.value;
+        const searchInput = document.getElementById('searchInput')?.value.trim();
+        const deptFilter = document.getElementById('deptFilter')?.value;
+        const directionFilter = document.getElementById('directionFilter')?.value;
+        const deadlineBefore = document.getElementById('deadlineBefore')?.value;
+        const createdFrom = document.getElementById('createdFrom')?.value;
+        const createdTo = document.getElementById('createdTo')?.value;
 
         let queryParams = [];
         if (typeFilter) queryParams.push(`type=${encodeURIComponent(typeFilter)}`);
         if (statusFilter) queryParams.push(`status=${encodeURIComponent(statusFilter)}`);
         if (searchInput) queryParams.push(`search=${encodeURIComponent(searchInput)}`);
+        if (deptFilter) queryParams.push(`department=${encodeURIComponent(deptFilter)}`);
+        if (directionFilter) queryParams.push(`direction=${encodeURIComponent(directionFilter)}`);
+        if (deadlineBefore) queryParams.push(`deadlineBefore=${encodeURIComponent(deadlineBefore)}`);
+        if (createdFrom) queryParams.push(`createdFrom=${encodeURIComponent(createdFrom)}`);
+        if (createdTo) queryParams.push(`createdTo=${encodeURIComponent(createdTo)}`);
         
         const queryString = queryParams.length > 0 ? `?${queryParams.join('&')}` : '';
 
@@ -137,6 +166,7 @@ function renderTablePage() {
     if (thead) {
         thead.innerHTML = `<tr>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Створено</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-1/3">Назва</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Тип</th>
             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Відділ</th>
@@ -222,9 +252,12 @@ function renderTablePage() {
                 deadlineClass = 'text-red-600 font-bold bg-red-50 px-2 py-1 rounded';
             }
         }
+        
+        const createdDate = new Date(doc.createdAt).toLocaleDateString('uk-UA');
 
         tr.innerHTML = `
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${doc.regNumber || '—'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${createdDate}</td>
             <td class="px-6 py-4 whitespace-normal break-words font-medium text-gray-900">${doc.title}</td>
             <td class="px-6 py-4 whitespace-nowrap">
                 <span class="block text-xs font-semibold text-gray-500 mb-1">${directionText}</span>
@@ -261,4 +294,40 @@ function renderPagination(total, start, end, totalPages) {
     html += `<button onclick="currentPage++; renderTablePage()" ${currentPage === totalPages ? 'disabled' : ''} class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50">Наступна</button>`;
     html += `</nav></div></div></div>`;
     pagination.innerHTML = html;
+}
+
+function exportToCSV() {
+    if (globalDocsList.length === 0) {
+        window.API.showModal({ title: 'Увага', message: 'Немає документів для експорту.' });
+        return;
+    }
+    
+    const headers = ['ID', 'Створено', 'Назва', 'Тип', 'Напрямок', 'Відділ', 'Контрагент', 'Статус', 'Дедлайн'];
+    
+    const rows = globalDocsList.map(doc => {
+        const createdDate = new Date(doc.createdAt).toLocaleDateString('uk-UA').replace(/,/g, '');
+        const deadline = doc.dueDate ? new Date(doc.dueDate).toLocaleDateString('uk-UA').replace(/,/g, '') : '';
+        const typeName = dynamicTypeLabels[doc.type] || doc.type || '';
+        
+        return [
+            `"${doc.regNumber || ''}"`,
+            `"${createdDate}"`,
+            `"${(doc.title || '').replace(/"/g, '""')}"`,
+            `"${typeName}"`,
+            `"${doc.direction || ''}"`,
+            `"${doc.department || ''}"`,
+            `"${(doc.counterparty || '').replace(/"/g, '""')}"`,
+            `"${doc.status || ''}"`,
+            `"${deadline}"`
+        ];
+    });
+    
+    const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `documents_export_${new Date().getTime()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }

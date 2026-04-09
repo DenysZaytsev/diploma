@@ -7,24 +7,25 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 flex flex-col min-h-screen">
-    <nav class="bg-indigo-600 shadow-lg">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between h-16">
-                <div class="flex items-center space-x-4">
-                    <span class="text-white text-xl font-bold">EDMS Admin</span>
-                    <a href="/pages/users.html" class="text-indigo-100 hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium transition">Користувачі</a>
-                    <a href="/pages/document-types.html" class="text-indigo-100 hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium transition">Типи документів</a>
-                    <a href="/pages/departments.html" class="text-indigo-100 hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium transition">Відділи</a>
-                    <a href="/pages/settings.html" class="bg-indigo-700 text-white px-3 py-2 rounded-md text-sm font-medium">Налаштування</a>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <div class="h-8 w-8 rounded-full bg-indigo-800 flex items-center justify-center text-white font-bold" id="userInitials"></div>
-                    <span id="userName" class="text-white text-sm hidden sm:block"></span>
-                    <button onclick="window.API.logout()" class="bg-indigo-500 hover:bg-indigo-700 text-white px-3 py-2 rounded-md text-sm">Вийти</button>
-                </div>
+   <nav class="bg-indigo-600 shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between h-16">
+            <div class="flex items-center space-x-4">
+                <span class="text-white text-xl font-bold">EDMS Admin</span>
+                <a href="/pages/users.html" class="text-indigo-100 hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium transition">Користувачі</a>
+                <a href="/pages/document-types.html" class="text-indigo-100 hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium transition">Типи документів</a>
+                <a href="/pages/departments.html" class="text-indigo-100 hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium transition">Відділи</a>
+                <a href="/pages/settings.html" class="bg-indigo-700 text-white px-3 py-2 rounded-md text-sm font-medium">Налаштування</a>
+                <a href="/pages/admin-audit.html" class="text-indigo-100 hover:bg-indigo-500 px-3 py-2 rounded-md text-sm font-medium transition">Аудит лог</a>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="h-8 w-8 rounded-full bg-indigo-800 flex items-center justify-center text-white font-bold" id="userInitials"></div>
+                <span id="userName" class="text-white text-sm hidden sm:block"></span>
+                <button onclick="window.API.logout()" class="bg-indigo-500 hover:bg-indigo-700 text-white px-3 py-2 rounded-md text-sm">Вийти</button>
             </div>
         </div>
-    </nav>
+    </div>
+</nav>
 
     <main class="flex-grow max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 w-full">
         <div class="bg-white rounded-lg shadow-sm p-6 max-w-2xl">
@@ -43,6 +44,35 @@
                     </div>
                 </div>
                 
+                <div class="mb-6 border border-gray-200 p-4 rounded-lg bg-gray-50">
+                    <div class="flex justify-between items-center mb-4 border-b pb-2">
+                        <h3 class="text-lg font-medium text-gray-800">Налаштування пошти (SMTP)</h3>
+                        <button type="button" id="testEmailBtn" class="px-3 py-1 bg-gray-200 text-gray-700 text-sm rounded hover:bg-gray-300 font-medium transition">Тест з'єднання</button>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">SMTP Сервер (Host)</label>
+                            <input type="text" id="smtpHost" placeholder="smtp.gmail.com" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">SMTP Порт</label>
+                            <input type="number" id="smtpPort" placeholder="465" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Email / Користувач</label>
+                            <input type="email" id="smtpUser" placeholder="edms@email.com" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Пароль (App Password)</label>
+                            <input type="password" id="smtpPass" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500">
+                        </div>
+                        <div class="sm:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Ім'я відправника</label>
+                            <input type="text" id="smtpFrom" placeholder="EDMS Notification" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500">
+                        </div>
+                    </div>
+                </div>
+
                 <div id="settingsFormSuccess" class="hidden mb-4 p-2 bg-green-100 text-green-800 text-sm rounded border border-green-200">Налаштування збережено.</div>
                 <div id="settingsFormError" class="hidden mb-4 p-2 bg-red-100 text-red-700 text-sm rounded border border-red-200"></div>
 

@@ -59,6 +59,8 @@ const registerUser = async (req, res) => {
         email: user.email,
         role: user.role,
         department: user.department,
+        avatar: user.avatar,
+        notifications: user.notifications,
         token: generateToken(user._id, user.role),
       });
     } else {
@@ -82,8 +84,41 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+const updateProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (req.body.notifications) {
+      try {
+        user.notifications = JSON.parse(req.body.notifications);
+      } catch (e) {
+        console.error('Invalid notifications format');
+      }
+    }
+
+    if (req.file) {
+      user.avatar = `/uploads/${req.file.filename}`;
+    }
+
+    await user.save();
+    res.json({
+      _id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+      department: user.department,
+      avatar: user.avatar,
+      notifications: user.notifications
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   loginUser,
   registerUser,
   getUserProfile,
+  updateProfile
 };

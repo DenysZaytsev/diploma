@@ -9,13 +9,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const userNameEl = document.getElementById('userName');
     if(userNameEl) userNameEl.textContent = user.fullName || 'Admin';
-    const initials = (user.fullName || 'A').split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
-    const userInitialsEl = document.getElementById('userInitials');
-    if(userInitialsEl) userInitialsEl.textContent = initials;
 
     try {
         const settings = await window.API.fetchAPI('/settings');
         document.getElementById('maxUploadFiles').value = settings.maxUploadFiles || 10;
+            if(settings.smtpHost) document.getElementById('smtpHost').value = settings.smtpHost;
+            if(settings.smtpPort) document.getElementById('smtpPort').value = settings.smtpPort;
+            if(settings.smtpUser) document.getElementById('smtpUser').value = settings.smtpUser;
+            if(settings.smtpPass) document.getElementById('smtpPass').value = settings.smtpPass;
+            if(settings.smtpFrom) document.getElementById('smtpFrom').value = settings.smtpFrom;
     } catch (e) {
         console.error("Не вдалося завантажити налаштування");
     }
@@ -29,14 +31,33 @@ document.addEventListener('DOMContentLoaded', async () => {
         errDiv.classList.add('hidden'); succDiv.classList.add('hidden');
 
         try {
-            await window.API.fetchAPI('/settings', 'PATCH', {
-                maxUploadFiles: document.getElementById('maxUploadFiles').value
-            });
+            const data = { maxUploadFiles: document.getElementById('maxUploadFiles').value };
+            const host = document.getElementById('smtpHost').value; if(host) data.smtpHost = host;
+            const port = document.getElementById('smtpPort').value; if(port) data.smtpPort = port;
+            const user = document.getElementById('smtpUser').value; if(user) data.smtpUser = user;
+            const pass = document.getElementById('smtpPass').value; if(pass) data.smtpPass = pass;
+            const from = document.getElementById('smtpFrom').value; if(from) data.smtpFrom = from;
+
+            await window.API.fetchAPI('/settings', 'PATCH', data);
             succDiv.classList.remove('hidden');
         } catch (error) {
             errDiv.textContent = error.message; errDiv.classList.remove('hidden');
         } finally {
             btn.disabled = false; btn.textContent = 'Зберегти налаштування';
+        }
+    });
+
+    document.getElementById('testEmailBtn').addEventListener('click', async () => {
+        const btn = document.getElementById('testEmailBtn');
+        const originalText = btn.textContent;
+        btn.disabled = true; btn.textContent = 'Перевірка...';
+        try {
+            const res = await window.API.fetchAPI('/settings/test-email', 'POST');
+            window.API.showModal({ title: 'Успіх', message: res.message });
+        } catch (error) {
+            window.API.showModal({ title: 'Помилка', message: error.message });
+        } finally {
+            btn.disabled = false; btn.textContent = originalText;
         }
     });
 });

@@ -23,16 +23,26 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Save to localStorage
             localStorage.setItem('token', data.token);
+            
+            // Підтримка формату { token, user: {...} } згідно з API
+            const userData = data.user || data;
             localStorage.setItem('user', JSON.stringify({
-                id: data._id,
-                fullName: data.fullName,
-                email: data.email,
-                role: data.role,
-                department: data.department
+                id: userData._id || userData.id,
+                fullName: userData.fullName,
+                email: userData.email,
+                role: userData.role,
+                department: userData.department
             }));
 
+            // Log the login action for System Audit
+            try {
+                await window.API.fetchAPI('/users/system/audit/login', 'POST');
+            } catch (auditError) {
+                console.error('Failed to log login action', auditError);
+            }
+
             // Redirect based on role
-            if (data.role === 'admin') {
+            if (userData.role === 'admin') {
                 window.location.href = '/pages/users.html';
             } else {
                 window.location.href = '/pages/dashboard.html';

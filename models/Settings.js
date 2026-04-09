@@ -6,7 +6,12 @@ const settingsSchema = new mongoose.Schema({
     default: 10,
     max: 30,
     min: 1
-  }
+  },
+  smtpHost: { type: String },
+  smtpPort: { type: Number },
+  smtpUser: { type: String },
+  smtpPass: { type: String },
+  smtpFrom: { type: String }
 }, { timestamps: true });
 
 const Settings = mongoose.model('Settings', settingsSchema);

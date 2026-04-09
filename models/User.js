@@ -19,6 +19,12 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  pendingEmail: {
+    type: String,
+  },
+  emailConfirmationToken: {
+    type: String,
+  },
   department: {
     type: String,
   },
@@ -29,6 +35,16 @@ const userSchema = new mongoose.Schema({
   isSuperAdmin: {
     type: Boolean,
     default: false,
+  },
+  avatar: {
+    type: String,
+  },
+  notifications: {
+    // Типи сповіщень
+    onStatusChange: { type: Boolean, default: true }, // Зміна статусу власного чи погодженого документа
+    onNewTask: { type: Boolean, default: true },      // Нове завдання (передано на погодження / на підпис)
+    onAdminAlerts: { type: Boolean, default: true },  // Системні сповіщення (для адміна)
+    onUserEvents: { type: Boolean, default: true }    // Дії з користувачами (для адміна)
   }
 }, { timestamps: true });
 
