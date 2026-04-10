@@ -24,14 +24,20 @@ app.use(helmet({
     crossOriginEmbedderPolicy: false
 }));
 
-const allowedOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim().replace(/\/$/, ''))
-    : ['http://localhost:5001', 'http://localhost:3000', 'http://localhost:5500'];
+// Always allow local development URLs for debugging
+const localOrigins = ['http://localhost:5001', 'http://localhost:3000', 'http://localhost:5500', 'http://127.0.0.1:5001', 'http://127.0.0.1:3000', 'http://127.0.0.1:5500'];
+// Add any custom production origins from Render environment variables
+const envOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(',').map(o => o.trim().replace(/\/$/, '')) : [];
+const allowedOrigins = [...localOrigins, ...envOrigins];
+
 app.use(cors({
     origin: (origin, cb) => {
-        if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+        // Allow requests with no origin (like same-origin requests or Postman)
+        if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return cb(null, true);
         console.warn(`CORS blocked request from origin: ${origin}`);
-        cb(new Error('CORS not allowed'));
+        const error = new Error('CORS not allowed');
+        error.status = 403;
+        cb(error);
     },
     credentials: true
 }));
