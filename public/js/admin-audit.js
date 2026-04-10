@@ -87,16 +87,17 @@ function renderTablePage() {
         if (log.action === 'Редагування') actionColor = 'text-blue-800 bg-blue-100';
         if (log.action === 'Видалення') actionColor = 'text-red-800 bg-red-100';
 
+        const esc = window.API.escapeHtml;
         tr.innerHTML = `
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${date}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                ${log.adminName}<br><span class="text-xs text-gray-500 font-normal">${log.adminEmail}</span>
+                ${esc(log.adminName)}<br><span class="text-xs text-gray-500 font-normal">${esc(log.adminEmail)}</span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-                <span class="px-2 py-1 text-xs font-medium rounded-full ${actionColor}">${log.action}</span>
+                <span class="px-2 py-1 text-xs font-medium rounded-full ${actionColor}">${esc(log.action)}</span>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${log.targetEmail || '—'}</td>
-            <td class="px-6 py-4 whitespace-normal break-words text-sm text-gray-600">${log.details || '—'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${esc(log.targetEmail) || '—'}</td>
+            <td class="px-6 py-4 whitespace-normal break-words text-sm text-gray-600">${esc(log.details) || '—'}</td>
         `;
         tbody.appendChild(tr);
     });

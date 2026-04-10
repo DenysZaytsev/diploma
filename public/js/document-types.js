@@ -65,9 +65,10 @@ function renderTablePage() {
             tr.className = 'hover:bg-gray-50 transition-colors cursor-pointer';
             tr.onclick = () => openEditTypeModal(t._id || t.id);
             
+            const esc = window.API.escapeHtml;
             tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-normal break-words font-medium text-gray-900 w-1/3">${t.name}</td>
-                <td class="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 w-1/2">${t.description || '—'}</td>
+                <td class="px-6 py-4 whitespace-normal break-words font-medium text-gray-900 w-1/3">${esc(t.name)}</td>
+                <td class="px-6 py-4 whitespace-normal break-words text-sm text-gray-500 w-1/2">${esc(t.description) || '—'}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button onclick="event.stopPropagation(); deleteDocType('${t._id || t.id}')" class="text-red-600 hover:text-red-900">Видалити</button>
                 </td>
@@ -178,30 +179,3 @@ window.updateDocType = async (e) => {
     }
 };
 
-window.openEditTypeModal = (id) => {
-    const type = globalTypesList.find(t => (t._id || t.id) === id);
-    if(!type) return;
-    document.getElementById('editTypeId').value = id;
-    document.getElementById('editTypeName').value = type.name;
-    document.getElementById('editTypeDescription').value = type.description || '';
-    document.getElementById('editTypeModal').classList.remove('hidden');
-};
-
-window.closeEditTypeModal = () => {
-    document.getElementById('editTypeModal').classList.add('hidden');
-};
-
-window.updateDocType = async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('editTypeId').value;
-    try {
-        await window.API.fetchAPI(`/document-types/${id}`, 'PATCH', {
-            name: document.getElementById('editTypeName').value,
-            description: document.getElementById('editTypeDescription').value
-        });
-        closeEditTypeModal();
-        loadDocumentTypes();
-    } catch(err) {
-        window.API.showModal({ title: 'Помилка', message: err.message });
-    }
-};

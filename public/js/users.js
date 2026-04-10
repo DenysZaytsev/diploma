@@ -165,18 +165,19 @@ function renderTablePage() {
                 openEditUserModal(u._id || u.id);
             };
 
+            const esc = window.API.escapeHtml;
             tr.innerHTML = `
                 <td class="px-6 py-4 whitespace-normal break-words font-medium text-gray-900 w-1/4">
                     <div class="flex items-center space-x-3">
                         ${avatarHtml}
-                        <span>${u.fullName}</span>
+                        <span>${esc(u.fullName)}</span>
                     </div>
                 </td>
-                <td class="px-6 py-4 whitespace-normal break-words text-gray-500 w-1/4">${u.email}</td>
+                <td class="px-6 py-4 whitespace-normal break-words text-gray-500 w-1/4">${esc(u.email)}</td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="px-2 py-1 text-xs font-medium rounded flex items-center w-fit ${roleBadgeClass}">${displayedRole}</span>
+                    <span class="px-2 py-1 text-xs font-medium rounded flex items-center w-fit ${roleBadgeClass}">${esc(displayedRole)}</span>
                 </td>
-                <td class="px-6 py-4 whitespace-normal break-words text-gray-500">${u.department || '—'}</td>
+                <td class="px-6 py-4 whitespace-normal break-words text-gray-500">${esc(u.department) || '—'}</td>
                 <td class="px-6 py-4 whitespace-nowrap">${statusBadge}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     ${actionButtons}

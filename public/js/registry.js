@@ -233,13 +233,14 @@ function renderTablePage() {
         const directionText = directionLabels[doc.direction] || '—';
 
         // Відповідальний
+        const esc = window.API.escapeHtml;
         let responsibleName = '<span class="text-gray-400 italic">Невідомо</span>';
         if (['draft', 'rejected', 'archived'].includes(doc.status)) {
-            responsibleName = doc.creator ? doc.creator.fullName : responsibleName;
+            responsibleName = doc.creator ? esc(doc.creator.fullName) : responsibleName;
         } else if (doc.status === 'on_approval') {
-            responsibleName = doc.approver ? doc.approver.fullName : responsibleName;
+            responsibleName = doc.approver ? esc(doc.approver.fullName) : responsibleName;
         } else if (['on_signing', 'signed'].includes(doc.status)) {
-            responsibleName = doc.signatory ? doc.signatory.fullName : responsibleName;
+            responsibleName = doc.signatory ? esc(doc.signatory.fullName) : responsibleName;
         }
 
         // Deadline
@@ -256,17 +257,17 @@ function renderTablePage() {
         const createdDate = new Date(doc.createdAt).toLocaleDateString('uk-UA');
 
         tr.innerHTML = `
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${doc.regNumber || '—'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">${esc(doc.regNumber) || '—'}</td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${createdDate}</td>
-            <td class="px-6 py-4 whitespace-normal break-words font-medium text-gray-900">${doc.title}</td>
+            <td class="px-6 py-4 whitespace-normal break-words font-medium text-gray-900">${esc(doc.title)}</td>
             <td class="px-6 py-4 whitespace-nowrap">
                 <span class="block text-xs font-semibold text-gray-500 mb-1">${directionText}</span>
                 <span class="px-2 py-0.5 inline-flex text-xs leading-5 font-medium rounded ${typeColor}">
-                    ${typeLabels[doc.type] || doc.type || 'Інше'}
+                    ${esc(typeLabels[doc.type] || doc.type || 'Інше')}
                 </span>
             </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${doc.department || '—'}</td>
-            <td class="px-6 py-4 whitespace-normal break-words text-gray-600">${doc.counterparty || '—'}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${esc(doc.department) || '—'}</td>
+            <td class="px-6 py-4 whitespace-normal break-words text-gray-600">${esc(doc.counterparty) || '—'}</td>
             <td class="px-6 py-4 whitespace-nowrap">
                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor}">
                     ${statusLabels[doc.status] || doc.status}

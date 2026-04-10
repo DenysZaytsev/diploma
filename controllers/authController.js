@@ -12,6 +12,9 @@ const loginUser = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
+      if (user.isBlocked) {
+        return res.status(403).json({ message: 'Ваш обліковий запис заблоковано. Зверніться до адміністратора.' });
+      }
       res.json({
         _id: user._id,
         fullName: user.fullName,
@@ -24,7 +27,8 @@ const loginUser = async (req, res) => {
       res.status(401).json({ message: 'Invalid email or password' });
     }
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Внутрішня помилка сервера' });
   }
 };
 
@@ -48,7 +52,7 @@ const registerUser = async (req, res) => {
       fullName,
       email,
       passwordHash,
-      role: role || 'employee', // Default to employee
+      role: 'employee', // Always employee on public registration
       department,
     });
 
@@ -67,7 +71,8 @@ const registerUser = async (req, res) => {
       res.status(400).json({ message: 'Invalid user data' });
     }
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Register error:', error);
+    res.status(500).json({ message: 'Внутрішня помилка сервера' });
   }
 };
 
@@ -75,12 +80,17 @@ const registerUser = async (req, res) => {
 // @route   GET /api/auth/profile
 // @access  Private
 const getUserProfile = async (req, res) => {
-  const user = await User.findById(req.user._id).select('-passwordHash');
+  try {
+    const user = await User.findById(req.user._id).select('-passwordHash');
 
-  if (user) {
-    res.json(user);
-  } else {
-    res.status(404).json({ message: 'User not found' });
+    if (user) {
+      res.json(user);
+    } else {
+      res.status(404).json({ message: 'User not found' });
+    }
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ message: 'Внутрішня помилка сервера' });
   }
 };
 
@@ -112,7 +122,8 @@ const updateProfile = async (req, res) => {
       notifications: user.notifications
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error('Update profile error:', error);
+    res.status(500).json({ message: 'Внутрішня помилка сервера' });
   }
 };
 

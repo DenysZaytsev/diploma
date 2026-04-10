@@ -1,9 +1,12 @@
+const crypto = require('crypto');
 const Document = require('../models/Document');
 const AuditLog = require('../models/AuditLog');
 const Settings = require('../models/Settings');
 const SystemAuditLog = require('../models/SystemAuditLog');
 const User = require('../models/User');
 const { sendSystemEmail } = require('../utils/emailService');
+
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const createAuditLog = async (documentId, userId, action, options = {}) => {
   await AuditLog.create({
@@ -56,21 +59,35 @@ const createDocument = async (req, res) => {
         'Юридичний відділ': 'LEG'
     };
     const deptPrefix = deptPrefixMap[req.user.department] || 'DOC';
-    const regNumber = `${deptPrefix}-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    const document = await Document.create({
-      title, direction, type, counterparty, dueDate,
-      regNumber,
-      department: req.user.department || 'Без відділу', // Прив'язуємо документ до відділу автора
-      creator: req.user._id,
-      status: 'draft',
-      files
-    });
+    let document;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const regNumber = `${deptPrefix}-${crypto.randomInt(100000, 999999)}`;
+      try {
+        document = await Document.create({
+          title, direction, type, counterparty, dueDate,
+          regNumber,
+          department: req.user.department || 'Без відділу',
+          creator: req.user._id,
+          status: 'draft',
+          files
+        });
+        break;
+      } catch (err) {
+        if (err.code === 11000 && attempt < 4) continue;
+        throw err;
+      }
+    }
+
+    if (!document) {
+      return res.status(500).json({ message: 'Не вдалося згенерувати унікальний реєстраційний номер' });
+    }
 
     await createAuditLog(document._id, req.user._id, 'create');
     res.status(201).json(document);
   } catch (error) {
-    res.status(500).json({ message: 'Error creating document', error: error.message });
+    console.error('Create document error:', error);
+    res.status(500).json({ message: 'Помилка створення документа' });
   }
 };
 
@@ -95,13 +112,14 @@ const getDocuments = async (req, res) => {
 
     // Пошук тексту (Назва, Контрагент, ID, Відповідальна особа)
     if (search) {
-      const matchingUsers = await User.find({ fullName: { $regex: search, $options: 'i' } }).select('_id');
+      const safeSearch = escapeRegex(search);
+      const matchingUsers = await User.find({ fullName: { $regex: safeSearch, $options: 'i' } }).select('_id');
       const userIds = matchingUsers.map(u => u._id);
 
       filter.$or = [
-        { regNumber: { $regex: search, $options: 'i' } },
-        { title: { $regex: search, $options: 'i' } },
-        { counterparty: { $regex: search, $options: 'i' } },
+        { regNumber: { $regex: safeSearch, $options: 'i' } },
+        { title: { $regex: safeSearch, $options: 'i' } },
+        { counterparty: { $regex: safeSearch, $options: 'i' } },
         { creator: { $in: userIds } },
         { approver: { $in: userIds } },
         { signatory: { $in: userIds } }
@@ -193,7 +211,7 @@ const addComment = async (req, res) => {
     
     // Перевірка доступу (користувач повинен мати право переглядати цей документ)
     if (req.user.role === 'employee' && doc.creator.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Access denied' });
-    if (['approver', 'signatory'].includes(req.user.role) && doc.department !== doc.department) return res.status(403).json({ message: 'Access denied' });
+    if (['approver', 'signatory'].includes(req.user.role) && req.user.department !== doc.department) return res.status(403).json({ message: 'Access denied' });
 
     await createAuditLog(doc._id, req.user._id, 'comment', { comment });
     res.json({ message: 'Коментар додано' });
@@ -275,14 +293,14 @@ const rejectDocument = async (req, res) => {
 
     const oldStatus = doc.status;
     doc.status = 'rejected';
-    
+
     if (oldStatus === 'on_approval') doc.approver = req.user._id;
     if (oldStatus === 'on_signing') doc.signatory = req.user._id;
-    
-    const docWithPopulated = await Document.findById(doc._id).populate('creator', 'email notifications');
-    const targetEmail = docWithPopulated.creator ? docWithPopulated.creator.email : 'Ініціатор';
 
     await doc.save();
+
+    const docWithPopulated = await Document.findById(doc._id).populate('creator', 'email notifications');
+    const targetEmail = docWithPopulated.creator ? docWithPopulated.creator.email : 'Ініціатор';
 
     await logSystemAction(req.user, 'Призначення документа', targetEmail, `Документ ${doc.regNumber} (${doc.title}) відхилено та повернуто ініціатору`);
     await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: oldStatus, toStatus: 'rejected', comment });
@@ -305,6 +323,9 @@ const signDocument = async (req, res) => {
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
     if (doc.status !== 'on_signing') return res.status(400).json({ message: 'Document must be on signing first' });
+    if (req.user.role === 'signatory' && doc.department !== req.user.department) {
+        return res.status(403).json({ message: 'Ви можете підписувати документи лише свого відділу' });
+    }
 
     doc.status = 'signed';
     doc.signatory = req.user._id;
@@ -385,6 +406,13 @@ const uploadFiles = async (req, res) => {
 
 const getDocumentAudit = async (req, res) => {
     try {
+        const doc = await Document.findById(req.params.id);
+        if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
+
+        if (req.user.role === 'employee' && doc.creator.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+
         const logs = await AuditLog.find({ document: req.params.id })
             .populate('user', 'fullName role')
             .sort({ createdAt: -1 });

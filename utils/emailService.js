@@ -13,7 +13,8 @@ const sendSystemEmail = async (to, subject, html) => {
             host: settings.smtpHost,
             port: settings.smtpPort || 465,
             secure: parseInt(settings.smtpPort) === 465,
-            auth: { user: settings.smtpUser, pass: settings.smtpPass }
+            auth: { user: settings.smtpUser, pass: settings.smtpPass },
+            family: 4 // Примусово IPv4 (важливо для Render.com)
         });
 
         const from = `"${settings.smtpFrom || 'EDMS System'}" <${settings.smtpUser}>`;

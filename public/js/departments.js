@@ -61,9 +61,10 @@ function renderTablePage() {
             tr.className = 'hover:bg-gray-50 transition-colors cursor-pointer';
             tr.onclick = () => openEditDeptModal(d._id || d.id);
             
+            const esc = window.API.escapeHtml;
             tr.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${d.name}</td>
-                <td class="px-6 py-4 text-sm text-gray-500 break-words whitespace-normal">${d.description || '—'}</td>
+                <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${esc(d.name)}</td>
+                <td class="px-6 py-4 text-sm text-gray-500 break-words whitespace-normal">${esc(d.description) || '—'}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button onclick="event.stopPropagation(); deleteDept('${d._id || d.id}')" class="text-red-600 hover:text-red-900">Видалити</button>
                 </td>
@@ -174,30 +175,3 @@ window.updateDept = async (e) => {
     }
 };
 
-window.openEditDeptModal = (id) => {
-    const dept = globalDeptsList.find(d => (d._id || d.id) === id);
-    if(!dept) return;
-    document.getElementById('editDeptId').value = id;
-    document.getElementById('editDeptName').value = dept.name;
-    document.getElementById('editDeptDescription').value = dept.description || '';
-    document.getElementById('editDeptModal').classList.remove('hidden');
-};
-
-window.closeEditDeptModal = () => {
-    document.getElementById('editDeptModal').classList.add('hidden');
-};
-
-window.updateDept = async (e) => {
-    e.preventDefault();
-    const id = document.getElementById('editDeptId').value;
-    try {
-        await window.API.fetchAPI(`/departments/${id}`, 'PATCH', {
-            name: document.getElementById('editDeptName').value,
-            description: document.getElementById('editDeptDescription').value
-        });
-        closeEditDeptModal();
-        loadDepartments();
-    } catch(err) {
-        window.API.showModal({ title: 'Помилка', message: err.message });
-    }
-};

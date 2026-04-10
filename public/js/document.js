@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (!currentDocId || currentDocId === 'undefined' || currentDocId === 'null') {
         document.getElementById('loadingIndicator').classList.add('hidden');
-        document.getElementById('errorIndicator').innerHTML = `Помилка: Неможливо зчитати ID документа. <br> <span class="text-xs text-gray-500">Поточний URL: ${rawUrl}</span><br>Будь ласка, оберіть документ з <a href="/pages/registry.html" class="text-blue-600 underline hover:text-blue-800">Реєстру</a>.`;
+        document.getElementById('errorIndicator').innerHTML = `Помилка: Неможливо зчитати ID документа. <br> <span class="text-xs text-gray-500">Поточний URL: ${window.API.escapeHtml(rawUrl)}</span><br>Будь ласка, оберіть документ з <a href="/pages/registry.html" class="text-blue-600 underline hover:text-blue-800">Реєстру</a>.`;
         document.getElementById('errorIndicator').classList.remove('hidden');
         return;
     }
@@ -139,9 +139,10 @@ async function loadDocumentDetails() {
                 filesHtml += `<div class="w-full flex flex-col mb-10 pb-10 border-b-2 border-gray-300 last:border-b-0 last:pb-0 last:mb-0">`;
                 
                 // 1. Назва файлу, розмір формат
+                const esc = window.API.escapeHtml;
                 filesHtml += `
                     <div class="mb-4">
-                        <h4 class="text-xl font-bold text-gray-900">${f.originalName}</h4>
+                        <h4 class="text-xl font-bold text-gray-900">${esc(f.originalName)}</h4>
                         <p class="text-sm text-gray-600 mt-1">Розмір: ${(f.size / 1024).toFixed(1)} KB | Формат: ${ext.toUpperCase()}</p>
                     </div>`;
 
@@ -153,7 +154,7 @@ async function loadDocumentDetails() {
                             <svg class="h-5 w-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                             Відкрити
                         </a>
-                        <a href="${fileUrl}" download="${f.originalName}" class="px-6 py-2.5 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 flex items-center transition-colors shadow-sm w-fit whitespace-nowrap">
+                        <a href="${fileUrl}" download="${esc(f.originalName)}" class="px-6 py-2.5 text-sm font-medium rounded-md bg-indigo-600 text-white hover:bg-indigo-700 flex items-center transition-colors shadow-sm w-fit whitespace-nowrap">
                             <svg class="h-5 w-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                             Завантажити
                         </a>
@@ -168,7 +169,7 @@ async function loadDocumentDetails() {
                 // 4. ОКРЕМИЙ плейсхолдер для превью файлу
                 filesHtml += `<div class="w-full bg-gray-50 border border-gray-200 rounded-lg flex justify-center p-0 overflow-hidden">`;
                 if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
-                    filesHtml += `<img src="${fileUrl}" class="max-w-full h-auto object-contain max-h-[800px]" alt="${f.originalName}">`;
+                    filesHtml += `<img src="${fileUrl}" class="max-w-full h-auto object-contain max-h-[800px]" alt="${esc(f.originalName)}">`;
                 } else if (ext === 'pdf') {
                     filesHtml += `<iframe src="${fileUrl}#toolbar=1&navpanes=0&view=FitH" class="w-full h-[800px] border-0" allowfullscreen></iframe>`;
                 } else {
@@ -480,7 +481,7 @@ async function loadAuditTrail() {
                         <div class="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
                             <div>
                                 <p class="text-sm text-gray-700">${detailsText}</p>
-                                <p class="text-xs text-gray-400 mt-1">Користувач: <span class="font-medium text-gray-900">${log.user ? log.user.fullName : 'Система'}</span> (${log.user ? log.user.role : 'sys'})</p>
+                                <p class="text-xs text-gray-400 mt-1">Користувач: <span class="font-medium text-gray-900">${log.user ? window.API.escapeHtml(log.user.fullName) : 'Система'}</span> (${log.user ? log.user.role : 'sys'})</p>
                             </div>
                             <div class="text-right text-xs whitespace-nowrap text-gray-500">
                                 <time datetime="${log.createdAt}">${new Date(log.createdAt).toLocaleString('uk-UA')}</time>

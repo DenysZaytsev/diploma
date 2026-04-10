@@ -27,7 +27,7 @@ router.route('/')
 router.route('/:id')
   .get(protect, getDocumentById)
   .patch(protect, authorize('employee'), updateDocument)
-  .delete(protect, deleteDocument);
+  .delete(protect, authorize('employee', 'admin'), deleteDocument);
 
 // Робота з файлами
 router.post('/:id/files', protect, upload.array('files', 30), uploadFiles);
@@ -38,7 +38,7 @@ router.post('/:id/submit', protect, authorize('employee'), submitDocument);
 router.post('/:id/approve', protect, authorize('approver'), approveDocument);
 router.post('/:id/reject', protect, authorize('approver', 'signatory'), rejectDocument);
 router.post('/:id/sign', protect, authorize('signatory'), signDocument);
-router.post('/:id/archive', protect, archiveDocument);
+router.post('/:id/archive', protect, authorize('approver'), archiveDocument);
 
 // Коментарі
 router.post('/:id/comments', protect, addComment);

@@ -52,7 +52,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         const originalText = btn.textContent;
         btn.disabled = true; btn.textContent = 'Перевірка...';
         try {
-            const res = await window.API.fetchAPI('/settings/test-email', 'POST');
+            const data = {};
+            const host = document.getElementById('smtpHost').value; if(host) data.smtpHost = host;
+            const port = document.getElementById('smtpPort').value; if(port) data.smtpPort = port;
+            const user = document.getElementById('smtpUser').value; if(user) data.smtpUser = user;
+            const pass = document.getElementById('smtpPass').value; if(pass) data.smtpPass = pass;
+            const from = document.getElementById('smtpFrom').value; if(from) data.smtpFrom = from;
+            
+            const res = await window.API.fetchAPI('/settings/test-email', 'POST', data);
             window.API.showModal({ title: 'Успіх', message: res.message });
         } catch (error) {
             window.API.showModal({ title: 'Помилка', message: error.message });

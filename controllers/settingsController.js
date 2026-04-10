@@ -35,20 +35,29 @@ const updateSettings = async (req, res) => {
 
 const testEmail = async (req, res) => {
   try {
+    const { smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom } = req.body;
     const settings = await Settings.findOne();
-    if (!settings || !settings.smtpHost || !settings.smtpUser || !settings.smtpPass) {
+
+    const host = smtpHost || settings?.smtpHost;
+    const port = smtpPort || settings?.smtpPort || 465;
+    const user = smtpUser || settings?.smtpUser;
+    const pass = smtpPass || settings?.smtpPass;
+    const from = smtpFrom || settings?.smtpFrom || 'EDMS System';
+
+    if (!host || !user || !pass) {
         return res.status(400).json({ message: 'Неповні налаштування пошти для перевірки' });
     }
 
     const transporter = nodemailer.createTransport({
-        host: settings.smtpHost,
-        port: settings.smtpPort || 465,
-        secure: parseInt(settings.smtpPort) === 465,
-        auth: { user: settings.smtpUser, pass: settings.smtpPass }
+        host: host,
+        port: parseInt(port),
+        secure: parseInt(port) === 465,
+        auth: { user: user, pass: pass },
+        family: 4 // Примусово IPv4 (важливо для Render.com)
     });
 
     await transporter.sendMail({
-        from: `"${settings.smtpFrom || 'EDMS System'}" <${settings.smtpUser}>`,
+        from: `"${from}" <${user}>`,
         to: req.user.email,
         subject: 'Тестове повідомлення EDMS',
         html: '<b>Налаштування пошти успішно перевірені!</b> Сервер працює коректно.'

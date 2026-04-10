@@ -31,7 +31,8 @@ router.get('/system/audit', protect, authorize('admin'), async (req, res) => {
     try {
         let query = {};
         if (req.query.search) {
-            const regex = new RegExp(req.query.search, 'i');
+            const safeSearch = req.query.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(safeSearch, 'i');
             query.$or = [
                 { adminName: regex },
                 { adminEmail: regex },
@@ -54,13 +55,15 @@ router.get('/system/audit', protect, authorize('admin'), async (req, res) => {
             }
         }
 
-        const sortField = req.query.sortBy || 'createdAt';
+        const allowedSortFields = ['createdAt', 'action', 'adminName', 'adminEmail', 'targetEmail'];
+        const sortField = allowedSortFields.includes(req.query.sortBy) ? req.query.sortBy : 'createdAt';
         const sortOrder = req.query.sortOrder === 'asc' ? 1 : -1;
 
         const logs = await SystemAuditLog.find(query).sort({ [sortField]: sortOrder });
         res.json(logs);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Server error:', error);
+        res.status(500).json({ message: 'Внутрішня помилка сервера' });
     }
 });
 
@@ -70,7 +73,8 @@ router.post('/system/audit/login', protect, async (req, res) => {
         await logAdminAction(req, 'Логін', req.user.email, 'Успішний вхід у систему');
         res.status(200).json({ success: true });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Server error:', error);
+        res.status(500).json({ message: 'Внутрішня помилка сервера' });
     }
 });
 
@@ -89,7 +93,8 @@ router.post('/system/audit/clear-request', protect, authorize('admin'), async (r
         
         res.status(200).json({ success: true, message: 'Запит надіслано' });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Server error:', error);
+        res.status(500).json({ message: 'Внутрішня помилка сервера' });
     }
 });
 
@@ -142,7 +147,8 @@ router.get('/', protect, authorize('admin'), async (req, res) => {
         const users = await User.find(filter).select('-passwordHash');
         res.json(users);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Server error:', error);
+        res.status(500).json({ message: 'Внутрішня помилка сервера' });
     }
 });
 
@@ -170,7 +176,8 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
         await logAdminAction(req, 'Створення', email, `Створено користувача. Роль: ${role}, Відділ: ${department || 'Немає'}`);
         res.status(201).json({ _id: user._id, email: user.email, fullName: user.fullName });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Server error:', error);
+        res.status(500).json({ message: 'Внутрішня помилка сервера' });
     }
 });
 
@@ -271,7 +278,8 @@ router.patch('/:id', protect, authorize('admin'), async (req, res) => {
         if (!user) return res.status(404).json({ message: 'Користувача не знайдено' });
         res.json(user);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Server error:', error);
+        res.status(500).json({ message: 'Внутрішня помилка сервера' });
     }
 });
 
@@ -301,7 +309,8 @@ router.delete('/:id', protect, authorize('admin'), async (req, res) => {
         
         res.json({ message: 'Користувача успішно видалено' });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Server error:', error);
+        res.status(500).json({ message: 'Внутрішня помилка сервера' });
     }
 });
 
