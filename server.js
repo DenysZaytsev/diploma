@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const connectDB = require('./config/db');
 const fs = require('fs');
 
@@ -18,7 +19,21 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 // Middleware
-app.use(cors());
+app.use(helmet({
+    contentSecurityPolicy: false, // Вимкнено для inline-скриптів Tailwind CDN
+    crossOriginEmbedderPolicy: false
+}));
+
+const allowedOrigins = process.env.CORS_ORIGINS
+    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+    : ['http://localhost:5001', 'http://localhost:3000', 'http://localhost:5500'];
+app.use(cors({
+    origin: (origin, cb) => {
+        if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+        cb(new Error('CORS not allowed'));
+    },
+    credentials: true
+}));
 app.use(express.json());
 
 // Serve static files from 'uploads' directory
@@ -39,6 +54,9 @@ app.use('/api/stats', require('./routes/statsRoutes'));
 app.use('/api/document-types', require('./routes/documentTypeRoutes'));
 app.use('/api/departments', require('./routes/departmentRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
+app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/saved-filters', require('./routes/savedFilterRoutes'));
+app.use('/api/delegations', require('./routes/delegationRoutes'));
 
 // Обробник 404 помилок (щоб сервер повертав JSON замість HTML сторінки)
 app.use((req, res, next) => {

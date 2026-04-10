@@ -1,5 +1,15 @@
 const mongoose = require('mongoose');
 
+const fileVersionSchema = new mongoose.Schema({
+  originalName: String,
+  mimeType: String,
+  size: Number,
+  path: String,
+  version: { type: Number, default: 1 },
+  uploadedAt: { type: Date, default: Date.now },
+  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+});
+
 const documentSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -15,12 +25,12 @@ const documentSchema = new mongoose.Schema({
     required: true,
   },
   type: {
-    type: String, // 'contract' | 'act' | 'invoice' | 'declaration' (може бути динамічним)
+    type: String,
     required: true,
   },
   department: {
     type: String,
-    required: true, // Документ завжди належить відділу ініціатора
+    required: true,
   },
   counterparty: {
     type: String,
@@ -46,18 +56,55 @@ const documentSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
   },
-  files: [{
+  files: [fileVersionSchema],
+  // Feature 1: File Versioning — history of replaced files
+  fileVersions: [{
+    fileId: mongoose.Schema.Types.ObjectId,
     originalName: String,
     mimeType: String,
     size: Number,
     path: String,
-    uploadedAt: { type: Date, default: Date.now }
+    version: Number,
+    uploadedAt: Date,
+    uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    replacedAt: { type: Date, default: Date.now }
   }],
+  // Feature 3: Document Tags/Keywords
+  tags: [{
+    type: String,
+    trim: true
+  }],
+  // Feature 6: Related Documents
+  relatedDocuments: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Document'
+  }],
+  // Feature 7: Document Security Classification
+  confidentiality: {
+    type: String,
+    enum: ['public', 'internal', 'confidential', 'secret'],
+    default: 'internal'
+  },
+  // Full-text search content (Feature 14)
+  textContent: {
+    type: String,
+    select: false
+  },
   isDeleted: {
     type: Boolean,
     default: false,
   }
 }, { timestamps: true });
+
+// Indexes
+documentSchema.index({ isDeleted: 1, status: 1 });
+documentSchema.index({ creator: 1 });
+documentSchema.index({ department: 1 });
+documentSchema.index({ createdAt: -1 });
+documentSchema.index({ dueDate: 1 });
+documentSchema.index({ tags: 1 });
+documentSchema.index({ confidentiality: 1 });
+documentSchema.index({ textContent: 'text' });
 
 const Document = mongoose.model('Document', documentSchema);
 module.exports = Document;

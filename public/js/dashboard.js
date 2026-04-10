@@ -1,12 +1,10 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Check Auth
     window.API.checkAuth();
-    
+
     const user = window.API.getUser();
 
-    // 2. Setup UI with User Data
     document.getElementById('userName').textContent = user.fullName || 'User';
-    
+
     const roleLabels = {
         'employee': 'Працівник',
         'approver': 'Керівник',
@@ -24,8 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         userRoleEl.textContent = roleLabels[user.role] || user.role;
         userRoleEl.className = `px-2 py-0.5 text-xs font-medium rounded-full inline-block mt-1 ${roleColors[user.role] || 'bg-gray-100 text-gray-800'}`;
     }
-    
-    // Додаємо посилання на Адмін-панель для Адміністратора
+
     if (user.role === 'admin') {
         const nav = document.querySelector('aside nav');
         if (nav) {
@@ -33,7 +30,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // Показуємо кнопки "Новий документ" ТІЛЬКИ для Employee (приховані по замовчуванню в HTML)
     if (user.role === 'employee') {
         const createLinks = document.querySelectorAll('a[href*="new-document"], #navNewDoc, #headerNewDocBtn');
         createLinks.forEach(el => {
@@ -42,13 +38,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Date
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     document.getElementById('dateDisplay').textContent = new Date().toLocaleDateString('uk-UA', options);
 
-    // 3. Fetch Data
     try {
-        // Адміністратор тепер також може бачити загальну статистику системи
         await fetchStats();
         await fetchRecentDocuments();
     } catch (error) {
@@ -59,17 +52,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function fetchStats() {
     try {
         const stats = await window.API.fetchAPI('/stats');
-        
-        // Знаходимо контейнер з плитками і динамічно його перебудовуємо
+
         const totalEl = document.getElementById('statTotal');
         if (totalEl) {
             const grid = totalEl.closest('.grid');
             if (grid) {
-                grid.className = 'grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-8';
-                grid.innerHTML = `
+                grid.className = 'grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-8';
+                let html = `
                     <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">Всього документів</dt><dd class="mt-1 text-3xl font-semibold text-gray-900">${stats.totalDocs}</dd></div></div>
                     <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">В роботі (Активні)</dt><dd class="mt-1 text-3xl font-semibold text-blue-600">${stats.inProgressDocs}</dd></div></div>
                     <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">Вхідні / Вихідні / Внутр.</dt><dd class="mt-1 text-xl font-semibold text-gray-800 mt-2">${stats.incomingDocs || 0} / ${stats.outgoingDocs || 0} / ${stats.internalDocs || 0}</dd></div></div>
+                `;
+
+                // Feature 5: Overdue count
+                if (stats.overdueDocs > 0) {
+                    html += `<div class="bg-red-50 overflow-hidden shadow rounded-lg border border-red-200"><div class="p-5"><dt class="text-sm font-medium text-red-600 truncate">Прострочені</dt><dd class="mt-1 text-3xl font-semibold text-red-700">${stats.overdueDocs}</dd></div></div>`;
+                }
+
+                html += `
                     <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">Чернетки</dt><dd class="mt-1 text-2xl font-semibold text-gray-600">${stats.statusDraft}</dd></div></div>
                     <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">На погодженні</dt><dd class="mt-1 text-2xl font-semibold text-yellow-600">${stats.statusOnApproval}</dd></div></div>
                     <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">На підписанні</dt><dd class="mt-1 text-2xl font-semibold text-indigo-600">${stats.statusOnSigning}</dd></div></div>
@@ -77,37 +77,88 @@ async function fetchStats() {
                     <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">Відхилено</dt><dd class="mt-1 text-2xl font-semibold text-red-600">${stats.statusRejected}</dd></div></div>
                     <div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">В архіві</dt><dd class="mt-1 text-2xl font-semibold text-gray-400">${stats.statusArchived}</dd></div></div>
                 `;
+
+                // Feature 12: Analytics tiles
+                if (stats.avgApprovalTime !== null) {
+                    html += `<div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">Сер. час погодження</dt><dd class="mt-1 text-2xl font-semibold text-indigo-600">${stats.avgApprovalTime} год</dd></div></div>`;
+                }
+                if (stats.rejectionRate !== null) {
+                    html += `<div class="bg-white overflow-hidden shadow rounded-lg border border-gray-100"><div class="p-5"><dt class="text-sm font-medium text-gray-500 truncate">Рівень відхилення</dt><dd class="mt-1 text-2xl font-semibold ${stats.rejectionRate > 30 ? 'text-red-600' : 'text-gray-600'}">${stats.rejectionRate}%</dd></div></div>`;
+                }
+
+                grid.innerHTML = html;
             }
+        }
+
+        // Feature 12: Activity feed
+        if (stats.recentActivity && stats.recentActivity.length > 0) {
+            renderActivityFeed(stats.recentActivity);
         }
     } catch (error) {
         console.error('Error fetching stats:', error);
     }
 }
 
+function renderActivityFeed(activities) {
+    const container = document.getElementById('activityFeedContainer');
+    if (!container) return;
+
+    const esc = window.API.escapeHtml;
+    const actionLabels = {
+        'create': 'Створено',
+        'status_change': 'Зміна статусу',
+        'file_upload': 'Завантажено файли',
+        'delete': 'Видалено',
+        'update': 'Відредаговано',
+        'comment': 'Коментар',
+        'file_delete': 'Видалено файл'
+    };
+
+    let html = '<h3 class="text-lg font-semibold text-gray-800 mb-4">Остання активність</h3>';
+    html += '<div class="space-y-3">';
+
+    activities.forEach(a => {
+        const time = new Date(a.createdAt).toLocaleString('uk-UA');
+        const userName = a.user ? esc(a.user.fullName) : 'Система';
+        const docTitle = a.document ? esc(a.document.regNumber || '') : '';
+        const action = actionLabels[a.action] || a.action;
+
+        html += `
+            <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
+                <div class="flex-1">
+                    <p class="text-sm text-gray-800"><span class="font-medium">${userName}</span> — ${esc(action)}</p>
+                    ${docTitle ? `<p class="text-xs text-gray-500 mt-0.5">Документ: ${docTitle}</p>` : ''}
+                    ${a.comment ? `<p class="text-xs text-gray-600 mt-1 bg-white p-1.5 rounded border">${esc(a.comment)}</p>` : ''}
+                </div>
+                <span class="text-xs text-gray-400 whitespace-nowrap">${time}</span>
+            </div>
+        `;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+
 async function fetchRecentDocuments() {
     try {
         const user = window.API.getUser();
         let query = '';
-        
-        // Для Керівників та Підписантів на дашборді показуємо ТІЛЬКИ їхній відділ
+
         if (user.role === 'approver' || user.role === 'signatory') {
             query = `?department=${encodeURIComponent(user.department)}`;
         }
 
         const documents = await window.API.fetchAPI(`/documents${query}`);
         const tbody = document.getElementById('recentDocsTable');
-        
-        tbody.innerHTML = ''; // Clear loading
+
+        tbody.innerHTML = '';
 
         if (documents.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">Немає документів</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">Немає документів</td></tr>';
             return;
         }
 
-        // Show only top 5 recent
         const recentDocs = documents.slice(0, 5);
 
-        // Динамічно оновлюємо заголовки таблиці
         const thead = tbody.previousElementSibling;
         if (thead) {
             thead.innerHTML = `<tr>
@@ -133,40 +184,34 @@ async function fetchRecentDocuments() {
         recentDocs.forEach(doc => {
             const tr = document.createElement('tr');
             const safeId = doc._id || doc.id || '';
-            if (!safeId) console.error('Документ завантажено без ID:', doc);
-            
+
             tr.className = 'hover:bg-gray-50 cursor-pointer transition-colors';
             tr.onclick = () => {
                 if (safeId) {
                     localStorage.setItem('currentDocId', safeId);
                     window.location.href = `/pages/document.html?id=${safeId}`;
-                } else {
-                    window.API.showModal({ title: 'Помилка', message: 'Відсутній ID документа' });
                 }
             };
 
-            // Type Badge color
             let typeColor = 'bg-gray-100 text-gray-800';
             const typeLabels = Object.keys(dynamicTypeLabels).length > 0 ? dynamicTypeLabels : { 'contract': 'Договір', 'act': 'Акт', 'invoice': 'Рахунок' };
             if (doc.type === 'contract') typeColor = 'bg-purple-100 text-purple-800 border border-purple-200';
             if (doc.type === 'act') typeColor = 'bg-blue-100 text-blue-800 border border-blue-200';
             if (doc.type === 'invoice') typeColor = 'bg-green-100 text-green-800 border border-green-200';
 
-            // Status Badge color
             let statusColor = 'bg-gray-100 text-gray-800';
             const statusLabels = {
-                'draft': 'Чернетка', 
-                'on_approval': 'На погодженні', 
+                'draft': 'Чернетка',
+                'on_approval': 'На погодженні',
                 'on_signing': 'На підписанні',
-                'signed': 'Підписано', 
-                'rejected': 'Відхилено', 'archived': 'В архіві'
+                'signed': 'Підписано',
+                'rejected': 'Відхилено',
+                'archived': 'В архіві'
             };
-        
-        // Direction Badge
-        const directionLabels = { 'incoming': '📥 Вхідний', 'outgoing': '📤 Вихідний', 'internal': '📁 Внутр.' };
-        const directionText = directionLabels[doc.direction] || '—';
 
-            // Відповідальний
+            const directionLabels = { 'incoming': '📥 Вхідний', 'outgoing': '📤 Вихідний', 'internal': '📁 Внутр.' };
+            const directionText = directionLabels[doc.direction] || '—';
+
             const esc = window.API.escapeHtml;
             let responsibleName = '<span class="text-gray-400 italic">Невідомо</span>';
             if (['draft', 'rejected', 'archived'].includes(doc.status)) {
@@ -182,7 +227,6 @@ async function fetchRecentDocuments() {
             if (doc.status === 'signed') statusColor = 'bg-green-100 text-green-800';
             if (doc.status === 'rejected') statusColor = 'bg-red-100 text-red-800';
 
-            // Deadline formating
             let deadlineText = '-';
             let deadlineClass = '';
             if (doc.dueDate) {
@@ -192,7 +236,7 @@ async function fetchRecentDocuments() {
                     deadlineClass = 'text-red-600 font-semibold';
                 }
             }
-            
+
             const createdDate = new Date(doc.createdAt).toLocaleDateString('uk-UA');
 
             tr.innerHTML = `
@@ -217,6 +261,6 @@ async function fetchRecentDocuments() {
         });
     } catch (error) {
         console.error('Error fetching documents:', error);
-        document.getElementById('recentDocsTable').innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-red-500">Помилка завантаження даних</td></tr>';
+        document.getElementById('recentDocsTable').innerHTML = '<tr><td colspan="9" class="px-6 py-4 text-center text-red-500">Помилка завантаження даних</td></tr>';
     }
 }

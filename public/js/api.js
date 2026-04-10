@@ -225,10 +225,127 @@ const openProfileSettings = async () => {
     });
 };
 
+// Feature 8: Notification bell
+const initNotificationBell = async () => {
+    const token = getToken();
+    if (!token) return;
+
+    // Create bell icon in header
+    const header = document.querySelector('header .flex.items-center') || document.querySelector('header');
+    if (!header) return;
+
+    const bellContainer = document.createElement('div');
+    bellContainer.id = 'notifBellContainer';
+    bellContainer.className = 'relative ml-3 mr-2 cursor-pointer';
+    bellContainer.innerHTML = `
+        <svg class="h-6 w-6 text-gray-500 hover:text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+        </svg>
+        <span id="notifBadge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">0</span>
+    `;
+    bellContainer.onclick = toggleNotifPanel;
+
+    // Insert before user initials
+    const userInitials = header.querySelector('#userInitials');
+    if (userInitials) {
+        userInitials.parentElement.insertBefore(bellContainer, userInitials);
+    } else {
+        header.appendChild(bellContainer);
+    }
+
+    // Create notification dropdown panel
+    const panel = document.createElement('div');
+    panel.id = 'notifPanel';
+    panel.className = 'hidden absolute right-0 top-full mt-2 w-80 max-h-96 overflow-y-auto bg-white rounded-lg shadow-xl border border-gray-200 z-[110]';
+    panel.innerHTML = '<div class="p-3 text-center text-sm text-gray-500">Завантаження...</div>';
+    bellContainer.appendChild(panel);
+
+    // Fetch unread count
+    try {
+        const { count } = await fetchAPI('/notifications/unread-count');
+        const badge = document.getElementById('notifBadge');
+        if (count > 0) {
+            badge.textContent = count > 99 ? '99+' : count;
+            badge.classList.remove('hidden');
+        }
+    } catch (e) {
+        // Notifications not critical
+    }
+};
+
+const toggleNotifPanel = async (e) => {
+    e.stopPropagation();
+    const panel = document.getElementById('notifPanel');
+    if (!panel) return;
+
+    if (!panel.classList.contains('hidden')) {
+        panel.classList.add('hidden');
+        return;
+    }
+
+    panel.classList.remove('hidden');
+    panel.innerHTML = '<div class="p-3 text-center text-sm text-gray-500">Завантаження...</div>';
+
+    try {
+        const notifications = await fetchAPI('/notifications?limit=15');
+        if (notifications.length === 0) {
+            panel.innerHTML = '<div class="p-4 text-center text-sm text-gray-500">Сповіщень немає</div>';
+            return;
+        }
+
+        let html = `<div class="p-2 border-b flex justify-between items-center">
+            <span class="text-sm font-medium text-gray-700">Сповіщення</span>
+            <button id="markAllReadBtn" class="text-xs text-indigo-600 hover:underline">Прочитати всі</button>
+        </div>`;
+
+        notifications.forEach(n => {
+            const time = new Date(n.createdAt).toLocaleString('uk-UA');
+            const unreadClass = n.isRead ? 'bg-white' : 'bg-indigo-50';
+            html += `
+                <div class="p-3 border-b hover:bg-gray-50 ${unreadClass} cursor-pointer" onclick="handleNotifClick('${n._id}', '${n.documentId || ''}')">
+                    <p class="text-sm font-medium text-gray-800">${escapeHtml(n.title)}</p>
+                    <p class="text-xs text-gray-600 mt-0.5">${escapeHtml(n.message)}</p>
+                    <p class="text-xs text-gray-400 mt-1">${time}</p>
+                </div>
+            `;
+        });
+
+        panel.innerHTML = html;
+
+        document.getElementById('markAllReadBtn')?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            await fetchAPI('/notifications/read-all', 'POST');
+            const badge = document.getElementById('notifBadge');
+            if (badge) badge.classList.add('hidden');
+            toggleNotifPanel({ stopPropagation: () => {} });
+        });
+    } catch (e) {
+        panel.innerHTML = '<div class="p-3 text-center text-sm text-red-500">Помилка завантаження</div>';
+    }
+};
+
+window.handleNotifClick = async (notifId, docId) => {
+    try {
+        await fetchAPI(`/notifications/${notifId}/read`, 'PATCH');
+    } catch (e) { /* ignore */ }
+    if (docId) {
+        window.location.href = `/pages/document.html?id=${docId}`;
+    }
+};
+
+// Close notif panel on outside click
+document.addEventListener('click', (e) => {
+    const panel = document.getElementById('notifPanel');
+    const container = document.getElementById('notifBellContainer');
+    if (panel && container && !container.contains(e.target)) {
+        panel.classList.add('hidden');
+    }
+});
+
 // Ініціалізація глобального UI
 document.addEventListener('DOMContentLoaded', () => {
     const user = getUser();
-    
+
     if (user) {
         // 1. Аватар користувача (фото або ініціали в кружечку)
         const initialsEls = document.querySelectorAll('#userInitials');
@@ -261,6 +378,9 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('resize', handleResize);
         handleResize(); // Перевірка при завантаженні
     }
+
+    // 4. Notification bell
+    initNotificationBell();
 
     // 3. Глобальна обробка клавіші Escape для закриття модальних вікон
     document.addEventListener('keydown', (e) => {

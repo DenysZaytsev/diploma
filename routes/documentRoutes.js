@@ -14,7 +14,11 @@ const {
   uploadFiles,
   getDocumentAudit,
   deleteDocument,
-  deleteFile
+  deleteFile,
+  replaceFile,
+  linkRelatedDocument,
+  unlinkRelatedDocument,
+  bulkAction
 } = require('../controllers/documentController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
@@ -24,6 +28,9 @@ router.route('/')
   .get(protect, getDocuments)
   .post(protect, authorize('employee'), upload.array('files', 30), createDocument);
 
+// Масові операції (Feature 13)
+router.post('/bulk', protect, bulkAction);
+
 router.route('/:id')
   .get(protect, getDocumentById)
   .patch(protect, authorize('employee'), updateDocument)
@@ -32,6 +39,12 @@ router.route('/:id')
 // Робота з файлами
 router.post('/:id/files', protect, upload.array('files', 30), uploadFiles);
 router.delete('/:id/files/:fileId', protect, deleteFile);
+// Feature 1: Replace file (versioning)
+router.put('/:id/files/:fileId', protect, upload.array('files', 1), replaceFile);
+
+// Feature 6: Related documents
+router.post('/:id/related', protect, linkRelatedDocument);
+router.delete('/:id/related/:relatedId', protect, unlinkRelatedDocument);
 
 // Переходи статусів
 router.post('/:id/submit', protect, authorize('employee'), submitDocument);

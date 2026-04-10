@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
     window.API.checkAuth();
-    
+
     const user = window.API.getUser();
 
     // ТІЛЬКИ Працівники (employee) можуть створювати документи
@@ -16,17 +16,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Setup UI with User Data
     document.getElementById('userName').textContent = user.fullName || 'User';
-    
+
     const roleLabels = {
         'employee': 'Працівник',
         'manager': 'Менеджер'
     };
     document.getElementById('userRole').textContent = roleLabels[user.role] || user.role;
-    
+
     // Form Submission
     const form = document.getElementById('newDocumentForm');
-    
-    // Динамічно переписуємо форму під нові поля (щоб не правити HTML)
+
+    // Динамічно переписуємо форму під нові поля
     form.innerHTML = `
         <div id="formError" class="hidden mb-4 p-3 bg-red-100 text-red-700 border border-red-200 rounded-md text-sm"></div>
         <div class="mb-4">
@@ -51,9 +51,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             <label class="block text-sm font-medium text-gray-700">Контрагент</label>
             <input type="text" id="docCounterparty" required class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
         </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Дедлайн (опційно)</label>
+                <input type="date" id="docDueDate" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Конфіденційність</label>
+                <select id="docConfidentiality" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    <option value="public">Публічний</option>
+                    <option value="internal" selected>Внутрішній</option>
+                    <option value="confidential">Конфіденційний</option>
+                    <option value="secret">Секретний</option>
+                </select>
+            </div>
+        </div>
         <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700">Дедлайн (опційно)</label>
-            <input type="date" id="docDueDate" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+            <label class="block text-sm font-medium text-gray-700">Теги (через кому)</label>
+            <input type="text" id="docTags" placeholder="договір, фінанси, 2026" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-indigo-500 focus:border-indigo-500">
+            <p class="text-xs text-gray-500 mt-1">Ключові слова для зручного пошуку</p>
         </div>
         <div class="mb-6">
             <label class="block text-sm font-medium text-gray-700">Прикріпити файли</label>
@@ -93,7 +109,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const formError = document.getElementById('formError');
         formError.classList.add('hidden');
         const submitBtn = document.getElementById('submitBtn');
@@ -105,10 +121,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         formData.append('direction', document.getElementById('docDirection').value);
         formData.append('type', document.getElementById('docType').value);
         formData.append('counterparty', document.getElementById('docCounterparty').value);
-        
+        formData.append('confidentiality', document.getElementById('docConfidentiality').value);
+
+        const tags = document.getElementById('docTags').value;
+        if (tags) formData.append('tags', tags);
+
         const dueDate = document.getElementById('docDueDate').value;
         if (dueDate) formData.append('dueDate', dueDate);
-        
+
         const fileInput = document.getElementById('docFiles');
 
         if (fileInput.files.length > currentSettings.maxUploadFiles) {
