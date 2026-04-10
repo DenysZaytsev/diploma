@@ -25,11 +25,12 @@ app.use(helmet({
 }));
 
 const allowedOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+    ? process.env.CORS_ORIGINS.split(',').map(o => o.trim().replace(/\/$/, ''))
     : ['http://localhost:5001', 'http://localhost:3000', 'http://localhost:5500'];
 app.use(cors({
     origin: (origin, cb) => {
         if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+        console.warn(`CORS blocked request from origin: ${origin}`);
         cb(new Error('CORS not allowed'));
     },
     credentials: true
