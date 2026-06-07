@@ -8,7 +8,10 @@ import {
   ChevronRight,
   Calendar,
   RotateCcw,
-  Trash2
+  Trash2,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { 
   translateStatus, 
@@ -45,6 +48,70 @@ const Registry: React.FC = () => {
   const [types, setTypes] = useState<{name: string, code: string}[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [sortField, setSortField] = useState<string>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  const sortedDocuments = React.useMemo(() => {
+    const sorted = [...documents];
+    if (!sortField) return sorted;
+
+    sorted.sort((a, b) => {
+      let valA: any = '';
+      let valB: any = '';
+
+      switch (sortField) {
+        case 'regNumber':
+          valA = a.regNumber || '';
+          valB = b.regNumber || '';
+          break;
+        case 'title':
+          valA = a.title || '';
+          valB = b.title || '';
+          break;
+        case 'status':
+          valA = a.status || '';
+          valB = b.status || '';
+          break;
+        case 'ownership':
+          const isOwnA = a.creator?._id === currentUser?._id;
+          const isOwnB = b.creator?._id === currentUser?._id;
+          valA = isOwnA ? 'own' : (a.creator?.fullName || '');
+          valB = isOwnB ? 'own' : (b.creator?.fullName || '');
+          break;
+        case 'department':
+          valA = a.department || '';
+          valB = b.department || '';
+          break;
+        case 'dueDate':
+          valA = a.dueDate ? new Date(a.dueDate).getTime() : 0;
+          valB = b.dueDate ? new Date(b.dueDate).getTime() : 0;
+          break;
+        case 'createdAt':
+          valA = new Date(a.createdAt).getTime();
+          valB = new Date(b.createdAt).getTime();
+          break;
+        default:
+          return 0;
+      }
+
+      if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+      if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return sorted;
+  }, [documents, sortField, sortDirection, currentUser]);
   
   const navigate = useNavigate();
 
@@ -60,7 +127,6 @@ const Registry: React.FC = () => {
     }
   }, []);
 
-  const [currentUser, setCurrentUser] = useState<any>(null);
   const canManageDocuments = currentUser?.role === 'admin';
 
   const fetchDocuments = useCallback(async () => {
@@ -309,10 +375,10 @@ const Registry: React.FC = () => {
                 <th className="px-6 py-4 w-12 text-center">
                   <input
                     type="checkbox"
-                    checked={documents.length > 0 && selectedDocs.length === documents.length}
+                    checked={sortedDocuments.length > 0 && selectedDocs.length === sortedDocuments.length}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setSelectedDocs(documents.map(d => d._id));
+                        setSelectedDocs(sortedDocuments.map(d => d._id));
                       } else {
                         setSelectedDocs([]);
                       }
@@ -320,12 +386,72 @@ const Registry: React.FC = () => {
                     className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                   />
                 </th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">ID / Номер</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Назва та Тип</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Статус</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Приналежність</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Відділ / Контрагент</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Дедлайн</th>
+                <th 
+                  className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors select-none"
+                  onClick={() => handleSort('regNumber')}
+                >
+                  <div className="flex items-center gap-1">
+                    ID / Номер
+                    {sortField === 'regNumber' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={14} className="text-blue-500" /> : <ArrowDown size={14} className="text-blue-500" />
+                    ) : <ArrowUpDown size={14} className="opacity-30" />}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors select-none"
+                  onClick={() => handleSort('title')}
+                >
+                  <div className="flex items-center gap-1">
+                    Назва та Тип
+                    {sortField === 'title' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={14} className="text-blue-500" /> : <ArrowDown size={14} className="text-blue-500" />
+                    ) : <ArrowUpDown size={14} className="opacity-30" />}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors select-none text-center"
+                  onClick={() => handleSort('status')}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    Статус
+                    {sortField === 'status' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={14} className="text-blue-500" /> : <ArrowDown size={14} className="text-blue-500" />
+                    ) : <ArrowUpDown size={14} className="opacity-30" />}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors select-none"
+                  onClick={() => handleSort('ownership')}
+                >
+                  <div className="flex items-center gap-1">
+                    Приналежність
+                    {sortField === 'ownership' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={14} className="text-blue-500" /> : <ArrowDown size={14} className="text-blue-500" />
+                    ) : <ArrowUpDown size={14} className="opacity-30" />}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors select-none"
+                  onClick={() => handleSort('department')}
+                >
+                  <div className="flex items-center gap-1">
+                    Відділ / Контрагент
+                    {sortField === 'department' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={14} className="text-blue-500" /> : <ArrowDown size={14} className="text-blue-500" />
+                    ) : <ArrowUpDown size={14} className="opacity-30" />}
+                  </div>
+                </th>
+                <th 
+                  className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors select-none"
+                  onClick={() => handleSort('dueDate')}
+                >
+                  <div className="flex items-center gap-1">
+                    Дедлайн
+                    {sortField === 'dueDate' ? (
+                      sortDirection === 'asc' ? <ArrowUp size={14} className="text-blue-500" /> : <ArrowDown size={14} className="text-blue-500" />
+                    ) : <ArrowUpDown size={14} className="opacity-30" />}
+                  </div>
+                </th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest w-10"></th>
               </tr>
             </thead>
@@ -339,11 +465,11 @@ const Registry: React.FC = () => {
                        </div>
                     </td>
                  </tr>
-              ) : documents.length === 0 ? (
+              ) : sortedDocuments.length === 0 ? (
                  <tr>
                     <td colSpan={9} className="px-6 py-12 text-center text-slate-400">Документів не знайдено</td>
                  </tr>
-              ) : documents.map((doc) => {
+              ) : sortedDocuments.map((doc) => {
                 const isOwn = doc.creator?._id === currentUser?._id;
                 const isSelected = selectedDocs.includes(doc._id);
                 return (
