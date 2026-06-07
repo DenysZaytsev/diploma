@@ -250,11 +250,8 @@ router.patch('/:id', protect, authorize('admin'), async (req, res) => {
             const emailExists = await User.findOne({ email: newEmail });
             if (emailExists) return res.status(400).json({ message: 'Користувач з таким email вже існує' });
             
-            const token = crypto.randomBytes(20).toString('hex');
-            updateData.pendingEmail = newEmail;
-            updateData.emailConfirmationToken = token;
-            delete updateData.email; // Email зміниться тільки після кліку по лінку
-            changes.push(`Запит на зміну Email (${oldEmail} -> ${newEmail})`);
+            // Адмін змінює email напряму, без підтвердження
+            changes.push(`Email (${oldEmail} -> ${newEmail})`);
         }
 
         if (updateData.role && updateData.role !== targetUser.role) changes.push(`Роль (${targetUser.role} -> ${updateData.role})`);
@@ -282,11 +279,7 @@ router.patch('/:id', protect, authorize('admin'), async (req, res) => {
         }
 
         if (isEmailChanged) {
-            // Збираємо повну адресу сервера з запиту
-            const baseUrl = `${req.protocol}://${req.get('host')}`;
-            const confirmUrl = `${baseUrl}/api/users/confirm-email/${updateData.emailConfirmationToken}`;
-            const msg = `Адміністратор ініціював зміну вашого email у системі EDMS.<br>Старий email: <b>${oldEmail}</b><br>Новий (очікує підтвердження): <b>${newEmail}</b><br><br>Щоб підтвердити зміну, будь ласка, перейдіть за посиланням:<br><br><a href="${confirmUrl}">${confirmUrl}</a><br><br>Якщо ви не запитували цю зміну, проігноруйте цей лист.`;
-            await sendSystemEmail([oldEmail, newEmail], 'Підтвердження зміни Email', msg);
+            await sendSystemEmail(newEmail, 'Зміна Email', `Вітаємо! Ваш email у системі EDMS було змінено адміністратором.<br>Старий email: <b>${oldEmail}</b><br>Новий email: <b>${newEmail}</b>`);
         }
 
         if (!user) return res.status(404).json({ message: 'Користувача не знайдено' });
