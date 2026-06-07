@@ -239,8 +239,11 @@ const Registry: React.FC = () => {
                   }
                 }
               }}
-              disabled={bulkLoading}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl text-xs font-bold transition-all"
+              disabled={bulkLoading || selectedDocs.some(id => {
+                const doc = documents.find(d => d._id === id);
+                return !doc || !['draft', 'rejected'].includes(doc.status);
+              })}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
             >
               Подати на погодження
             </button>
@@ -259,8 +262,11 @@ const Registry: React.FC = () => {
                   }
                 }
               }}
-              disabled={bulkLoading}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white rounded-xl text-xs font-bold transition-all"
+              disabled={bulkLoading || selectedDocs.some(id => {
+                const doc = documents.find(d => d._id === id);
+                return !doc || doc.status !== 'draft';
+              })}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
             >
               Видалити
             </button>

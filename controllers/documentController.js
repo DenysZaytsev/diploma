@@ -914,7 +914,8 @@ const bulkAction = async (req, res) => {
 
                 switch (action) {
                     case 'submit':
-                        if (doc.creator.toString() !== req.user._id.toString() || !['draft', 'rejected'].includes(doc.status)) {
+                        const hasSubmitAccess = await checkDraftEditAccess(doc, req.user);
+                        if (!hasSubmitAccess || !['draft', 'rejected'].includes(doc.status)) {
                             results.failed++;
                             results.errors.push({ id: docId, error: 'Invalid state or access' });
                             continue;
@@ -927,6 +928,12 @@ const bulkAction = async (req, res) => {
                         break;
 
                     case 'delete':
+                        const hasDeleteAccess = await checkDraftEditAccess(doc, req.user);
+                        if (!hasDeleteAccess && req.user.role !== 'admin') {
+                            results.failed++;
+                            results.errors.push({ id: docId, error: 'Access denied' });
+                            continue;
+                        }
                         if (req.user.role === 'employee' && doc.status !== 'draft') {
                             results.failed++;
                             results.errors.push({ id: docId, error: 'Only drafts can be deleted' });
