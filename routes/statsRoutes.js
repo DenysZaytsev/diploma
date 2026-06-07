@@ -24,7 +24,15 @@ router.get('/', protect, async (req, res) => {
     const accessibleDepts = [req.user.department, ...delegatedDepts].filter(Boolean);
 
     if (req.user.role === 'employee') {
-      filter.creator = req.user._id;
+      const activeDelegations = await Delegation.find({
+        delegate: req.user._id,
+        role: 'employee',
+        isActive: true,
+        dateFrom: { $lte: now },
+        dateTo: { $gte: now }
+      });
+      const delegatorIds = activeDelegations.map(d => d.delegator);
+      filter.creator = { $in: [req.user._id, ...delegatorIds] };
     } else if (req.user.role === 'approver') {
       filter.department = { $in: accessibleDepts };
     } else if (req.user.role === 'signatory') {
