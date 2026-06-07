@@ -99,6 +99,14 @@ const Registry: React.FC = () => {
       } catch (e) {}
     }
   }, []);
+
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin' && !searchParams.has('myDocs')) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set('myDocs', 'true');
+      setSearchParams(newParams);
+    }
+  }, [currentUser, searchParams, setSearchParams]);
   const resetFilters = () => {
     setSearchParams(new URLSearchParams());
   };
@@ -206,6 +214,18 @@ const Registry: React.FC = () => {
             <option value="">Всі статуси</option>
             {Object.entries(statusLabels).map(([code, label]) => <option key={code} value={code}>{label}</option>)}
           </select>
+
+          {currentUser?.role !== 'admin' && (
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer select-none px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100/70 transition-all">
+              <input 
+                type="checkbox"
+                checked={searchParams.get('myDocs') === 'true'}
+                onChange={(e) => updateFilter('myDocs', e.target.checked ? 'true' : 'false')}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer w-4 h-4"
+              />
+              Тільки мої та делеговані
+            </label>
+          )}
 
           <button 
             onClick={resetFilters}
