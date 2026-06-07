@@ -28,7 +28,7 @@ function cn(...inputs: ClassValue[]) {
 }
 
 const Users: React.FC = () => {
-  const { user: authUser } = useAuth();
+  const { user: authUser, updateUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [departments, setDepartments] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,7 +83,11 @@ const Users: React.FC = () => {
 
   const handleSaveUser = async (userData: Partial<User>) => {
     if (selectedUser?._id) {
-      await API.patch(`/users/${selectedUser._id}`, userData);
+      const updated = await API.patch<any>(`/users/${selectedUser._id}`, userData);
+      // If editing self, update auth context (e.g. after email change)
+      if (selectedUser._id === authUser?._id && updated) {
+        updateUser({ ...authUser, ...updated } as any);
+      }
     } else {
       await API.post('/users', userData);
     }
@@ -144,7 +148,7 @@ const Users: React.FC = () => {
     'admin': 'bg-red-50 text-red-700 border-red-100'
   };
 
-  const fullCurrentUser = users.find(u => u.email === authUser?.email) || authUser;
+  const fullCurrentUser = users.find(u => u._id === authUser?._id) || authUser;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
