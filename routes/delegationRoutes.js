@@ -29,7 +29,16 @@ router.post('/', protect, authorize('approver', 'signatory', 'employee'), async 
             return res.status(400).json({ message: 'Вкажіть делегата та дати' });
         }
 
-        if (new Date(dateTo) <= new Date(dateFrom)) {
+        const fromDate = new Date(dateFrom);
+        const toDate = new Date(dateTo);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (fromDate < today) {
+            return res.status(400).json({ message: 'Дата початку не може бути в минулому' });
+        }
+
+        if (toDate <= fromDate) {
             return res.status(400).json({ message: 'Дата закінчення має бути після дати початку' });
         }
 

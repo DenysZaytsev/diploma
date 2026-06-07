@@ -86,6 +86,24 @@ const Delegations: React.FC = () => {
 
     setSubmitLoading(true);
     setError(null);
+
+    const fromDate = new Date(dateFrom);
+    const toDate = new Date(dateTo);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (fromDate < today) {
+      setError('Дата початку не може бути в минулому');
+      setSubmitLoading(false);
+      return;
+    }
+
+    if (toDate <= fromDate) {
+      setError('Дата закінчення має бути після дати початку');
+      setSubmitLoading(false);
+      return;
+    }
+
     try {
       await API.post('/delegations', {
         delegateId,
