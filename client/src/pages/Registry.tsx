@@ -61,6 +61,25 @@ const Registry: React.FC = () => {
   };
 
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [activeDelegators, setActiveDelegators] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchDelegations = async () => {
+      try {
+        const data = await API.get<any[]>('/delegations');
+        const now = new Date();
+        const delegators = data
+          .filter(d => d.isActive && d.delegate?._id === currentUser?._id && new Date(d.dateFrom) <= now && new Date(d.dateTo) >= now)
+          .map(d => d.delegator?._id);
+        setActiveDelegators(delegators);
+      } catch (e) {
+        console.error('Failed to fetch delegations', e);
+      }
+    };
+    if (currentUser) {
+      fetchDelegations();
+    }
+  }, [currentUser]);
 
   const sortedDocuments = React.useMemo(() => {
     const sorted = [...documents];
@@ -209,8 +228,9 @@ const Registry: React.FC = () => {
               if (documents.length === 0) return;
               const headers = ['ID/Номер', 'Назва', 'Напрямок', 'Тип', 'Статус', 'Приналежність', 'Відділ', 'Контрагент', 'Дедлайн', 'Дата створення'];
               const rows = documents.map(doc => {
-                const isOwn = doc.creator?._id === currentUser?._id;
-                const ownership = isOwn ? 'Власний' : `Делеговано від ${doc.creator?.fullName || ''}`;
+                const isOwn = !!(currentUser?._id && doc.creator?._id && doc.creator._id === currentUser._id);
+                const isDelegated = !!(doc.creator?._id && activeDelegators.includes(doc.creator._id));
+                const ownership = isOwn ? 'Власний' : isDelegated ? `Делеговано від ${doc.creator?.fullName || ''}` : `Загальний (${doc.creator?.fullName || ''})`;
                 return [
                   doc.regNumber,
                   doc.title,
@@ -470,7 +490,8 @@ const Registry: React.FC = () => {
                     <td colSpan={9} className="px-6 py-12 text-center text-slate-400">Документів не знайдено</td>
                  </tr>
               ) : sortedDocuments.map((doc) => {
-                const isOwn = doc.creator?._id === currentUser?._id;
+                const isOwn = !!(currentUser?._id && doc.creator?._id && doc.creator._id === currentUser._id);
+                const isDelegated = !!(doc.creator?._id && activeDelegators.includes(doc.creator._id));
                 const isSelected = selectedDocs.includes(doc._id);
                 return (
                 <tr 
@@ -523,10 +544,17 @@ const Registry: React.FC = () => {
                       <span className="px-2 py-1 bg-green-50 border border-green-200 text-green-700 text-[10px] font-bold rounded uppercase tracking-wide">
                         Власний
                       </span>
-                    ) : (
+                    ) : isDelegated ? (
                       <div className="space-y-0.5">
                         <span className="px-2 py-1 bg-blue-50 border border-blue-200 text-blue-700 text-[10px] font-bold rounded uppercase tracking-wide">
                           Делеговано
+                        </span>
+                        <p className="text-xs text-slate-500 font-medium mt-1">{doc.creator?.fullName || 'Інший користувач'}</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5">
+                        <span className="px-2 py-1 bg-slate-100 border border-slate-200 text-slate-600 text-[10px] font-bold rounded uppercase tracking-wide">
+                          Загальний
                         </span>
                         <p className="text-xs text-slate-500 font-medium mt-1">{doc.creator?.fullName || 'Інший користувач'}</p>
                       </div>
