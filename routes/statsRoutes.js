@@ -40,6 +40,25 @@ router.get('/', protect, async (req, res) => {
       filter.department = { $in: accessibleDepts };
     }
 
+    // Privacy and Confidentiality filter: hide drafts of others, and hide secret ops outside dept
+    if (req.user.role !== 'admin' && req.user.role !== 'employee') {
+        if (!filter.$and) filter.$and = [];
+        
+        filter.$and.push({
+            $or: [
+                { creator: req.user._id },
+                { status: { $ne: 'draft' } }
+            ]
+        });
+
+        filter.$and.push({
+            $or: [
+                { confidentiality: { $ne: 'secret' } },
+                { department: { $in: accessibleDepts } }
+            ]
+        });
+    }
+
     const totalDocs = await Document.countDocuments(filter);
 
     // Напрямки

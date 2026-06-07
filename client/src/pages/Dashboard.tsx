@@ -59,10 +59,10 @@ const Dashboard: React.FC = () => {
   if (!stats) return <div>Помилка завантаження статистики</div>;
 
   const statCards = [
-    { label: 'Всього документів', value: stats.totalDocs, icon: FileText, color: 'text-slate-900', bg: 'bg-white', link: '/registry' },
-    { label: 'В роботі', value: stats.inProgressDocs, icon: Clock, color: 'text-blue-600', bg: 'bg-blue-50/50', link: '/registry?inProgress=true' },
-    { label: 'Прострочені', value: stats.overdueDocs, icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-50', link: '/registry?overdue=true', hide: stats.overdueDocs === 0 },
-    { label: 'Підписано', value: stats.statusSigned, icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50/50', link: '/registry?status=signed' },
+    { label: 'Всього документів', value: stats.totalDocs, icon: FileText, color: 'text-slate-900', bg: 'bg-white', link: '/registry?myDocs=true' },
+    { label: 'В роботі', value: stats.inProgressDocs, icon: Clock, color: 'text-blue-600', bg: 'bg-blue-50/50', link: '/registry?myDocs=true&inProgress=true' },
+    { label: 'Прострочені', value: stats.overdueDocs, icon: AlertCircle, color: 'text-red-600', bg: 'bg-red-50', link: '/registry?myDocs=true&overdue=true', hide: stats.overdueDocs === 0 },
+    { label: 'Підписано', value: stats.statusSigned, icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50/50', link: '/registry?myDocs=true&status=signed' },
   ];
 
   return (
@@ -118,15 +118,19 @@ const Dashboard: React.FC = () => {
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Додаткові статуси</h3>
                 <div className="space-y-3">
                    {[
-                     { label: 'Чернетки', value: stats.statusDraft, color: 'bg-slate-100 text-slate-600' },
-                     { label: 'На погодженні', value: stats.statusOnApproval, color: 'bg-amber-100 text-amber-700' },
-                     { label: 'На підписанні', value: stats.statusOnSigning, color: 'bg-indigo-100 text-indigo-700' },
-                     { label: 'Відхилено', value: stats.statusRejected, color: 'bg-red-100 text-red-700' }
+                     { label: 'Чернетки', value: stats.statusDraft, color: 'bg-slate-100 text-slate-600', status: 'draft' },
+                     { label: 'На погодженні', value: stats.statusOnApproval, color: 'bg-amber-100 text-amber-700', status: 'on_approval' },
+                     { label: 'На підписанні', value: stats.statusOnSigning, color: 'bg-indigo-100 text-indigo-700', status: 'on_signing' },
+                     { label: 'Відхилено', value: stats.statusRejected, color: 'bg-red-100 text-red-700', status: 'rejected' }
                    ].map((s, i) => (
-                     <div key={i} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                     <Link 
+                       key={i} 
+                       to={`/registry?myDocs=true&status=${s.status}`}
+                       className="flex items-center justify-between p-2 hover:bg-slate-50 rounded-lg transition-colors"
+                     >
                         <span className="text-sm font-medium text-slate-700">{s.label}</span>
                         <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${s.color}`}>{s.value}</span>
-                     </div>
+                     </Link>
                    ))}
                 </div>
              </div>

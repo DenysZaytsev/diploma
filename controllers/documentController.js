@@ -209,10 +209,8 @@ const getDocuments = async (req, res) => {
 
     const { type, status, search, direction, department, deadlineBefore, createdFrom, createdTo, tags, confidentiality, overdue, myDocs, inProgress } = req.query;
 
-    // Синхронізація статистики: якщо myDocs=true, показуємо лише документи поточного юзера
-    if (myDocs === 'true') {
-        filter.creator = req.user._id;
-    }
+    // Синхронізація статистики: якщо myDocs=true, показуємо лише документи поточного юзера або делеговані йому
+    // Винесемо логіку в ролеві фільтри нижче для точної відповідності
 
     if (type) filter.type = type;
     if (direction) filter.direction = direction;
@@ -270,9 +268,18 @@ const getDocuments = async (req, res) => {
     }
 
     // Role-based access
+    const now = new Date();
+    const myDelegations = await Delegation.find({
+        delegate: req.user._id,
+        isActive: true,
+        dateFrom: { $lte: now },
+        dateTo: { $gte: now }
+    });
+    const delegatedDepts = myDelegations.map(d => d.department);
+    const accessibleDepts = [req.user.department, ...delegatedDepts].filter(Boolean);
+
     if (req.user.role === 'employee') {
       // Find active delegators for the current user
-      const now = new Date();
       const activeDelegations = await Delegation.find({
         delegate: req.user._id,
         role: 'employee',
@@ -287,8 +294,7 @@ const getDocuments = async (req, res) => {
         // Dashboard drill-down: show documents created by this user or delegated to them
         filter.creator = { $in: ownAndDelegatedCreators };
         if (status) {
-            if (!filter.$and) filter.$and = [];
-            filter.$and.push({ status });
+            filter.status = status;
         }
       } else {
         // Normal registry: show own/delegated docs + signed/archived public docs from others
@@ -301,11 +307,25 @@ const getDocuments = async (req, res) => {
         if (!filter.$and) filter.$and = [];
         filter.$and.push(accessConditions);
         if (status) {
-            filter.$and.push({ status });
+            filter.status = status;
         }
       }
     } else {
-      if (status) filter.status = status;
+      if (myDocs === 'true') {
+        // Dashboard drill-down for non-employee roles
+        if (req.user.role === 'signatory') {
+          filter.status = status || 'on_signing';
+          filter.department = { $in: accessibleDepts };
+        } else if (req.user.role === 'approver') {
+          if (status) filter.status = status;
+          filter.department = { $in: accessibleDepts };
+        } else if (req.user.role === 'admin') {
+          if (status) filter.status = status;
+        }
+      } else {
+        if (status) filter.status = status;
+      }
+
       // Privacy and Confidentiality filter: hide drafts of others, and hide secret ops outside dept
       if (req.user.role !== 'admin') {
           if (!filter.$and) filter.$and = [];
@@ -320,7 +340,7 @@ const getDocuments = async (req, res) => {
           filter.$and.push({
               $or: [
                   { confidentiality: { $ne: 'secret' } },
-                  { department: req.user.department }
+                  { department: { $in: accessibleDepts } }
               ]
           });
       }
