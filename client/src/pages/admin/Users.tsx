@@ -13,7 +13,8 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
-  RotateCcw
+  RotateCcw,
+  Download
 } from 'lucide-react';
 import UserModal from '../../components/admin/UserModal';
 import type { User } from '../../components/admin/UserModal';
@@ -152,13 +153,41 @@ const Users: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900">Користувачі</h1>
           <p className="text-slate-500 mt-1 font-medium">Керування обліковими записами та правами доступу</p>
         </div>
-        <button 
-          onClick={openAddModal}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-xl text-sm font-bold text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20 transition-all"
-        >
-          <Plus size={18} />
-          Новий користувач
-        </button>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => {
+              if (filteredUsers.length === 0) return;
+              const headers = ['ПІБ', 'Email', 'Роль', 'Відділ', 'Статус'];
+              const rows = filteredUsers.map(u => [
+                u.fullName,
+                u.email,
+                roleLabels[u.role] || u.role,
+                u.department || '',
+                u.isBlocked ? 'Заблокований' : 'Активний'
+              ]);
+              const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
+              const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.setAttribute('href', url);
+              link.setAttribute('download', `users_export_${new Date().toISOString().slice(0,10)}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all"
+          >
+            <Download size={18} />
+            Експорт CSV
+          </button>
+          <button 
+            onClick={openAddModal}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-xl text-sm font-bold text-white hover:bg-blue-700 shadow-lg shadow-blue-600/20 transition-all"
+          >
+            <Plus size={18} />
+            Новий користувач
+          </button>
+        </div>
       </div>
 
       {/* Toolbar */}
