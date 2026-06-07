@@ -87,8 +87,8 @@ const Delegations: React.FC = () => {
     setSubmitLoading(true);
     setError(null);
 
-    const fromDate = new Date(dateFrom);
-    const toDate = new Date(dateTo);
+    const fromDate = new Date(dateFrom + 'T00:00:00');
+    const toDate = new Date(dateTo + 'T23:59:59');
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -196,6 +196,7 @@ const Delegations: React.FC = () => {
                     type="date"
                     required
                     value={dateFrom}
+                    min={new Date().toISOString().split('T')[0]}
                     onChange={(e) => setDateFrom(e.target.value)}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm bg-white text-slate-800"
                   />
@@ -206,6 +207,7 @@ const Delegations: React.FC = () => {
                     type="date"
                     required
                     value={dateTo}
+                    min={dateFrom || new Date().toISOString().split('T')[0]}
                     onChange={(e) => setDateTo(e.target.value)}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm bg-white text-slate-800"
                   />

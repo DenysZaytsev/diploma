@@ -29,8 +29,8 @@ router.post('/', protect, authorize('approver', 'signatory', 'employee'), async 
             return res.status(400).json({ message: 'Вкажіть делегата та дати' });
         }
 
-        const fromDate = new Date(dateFrom);
-        const toDate = new Date(dateTo);
+        const fromDate = new Date(dateFrom + 'T00:00:00');
+        const toDate = new Date(dateTo + 'T23:59:59');
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
