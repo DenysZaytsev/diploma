@@ -4,6 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
+    "build": "npm run build:client",
     "build:client": "cd client && npm install && npm run build",
     "dev:backend": "nodemon server.js",
     "dev:frontend": "cd client && npm run dev",
