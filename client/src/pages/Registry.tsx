@@ -69,7 +69,7 @@ const Registry: React.FC = () => {
     try {
       const result = await API.post('/documents/bulk', { documentIds: selectedDocs, action: 'submit' });
       // Expected result shape { succeeded: [], failed: [{id, reason}] }
-      setBulkResult(result);
+      setBulkResult(result as { succeeded: string[]; failed: { id: string; reason: string; }[] });
       setResultModalOpen(true);
       setSelectedDocs([]);
       await fetchDocuments();

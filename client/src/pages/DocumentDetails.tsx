@@ -796,24 +796,24 @@ const DocumentDetails: React.FC = () => {
                           {log.user ? log.user.fullName.charAt(0) : '?'}
                         </div>
                         <div className="min-w-0">
-  <p className="text-xs text-slate-600 mt-1">
-    {translateAuditAction(log.action)}
-  </p>
-  {log.comment && (
-    <p className="text-xs text-slate-500 mt-1.5 bg-slate-50 border border-slate-100 rounded-lg p-2 italic leading-relaxed">
-      {log.comment}
-    </p>
-  )}
-  <p className="text-[10px] text-slate-400 mt-1">
-    {new Date(log.createdAt).toLocaleString('uk-UA')}
-  </p>
-</div>
+                          <p className="text-xs text-slate-600 mt-1">
+                            {translateAuditAction(log.action)}
+                          </p>
+                          {log.comment && (
+                            <p className="text-xs text-slate-500 mt-1.5 bg-slate-50 border border-slate-100 rounded-lg p-2 italic leading-relaxed">
+                              {log.comment}
+                            </p>
+                          )}
+                          <p className="text-[10px] text-slate-400 mt-1">
+                            {new Date(log.createdAt).toLocaleString('uk-UA')}
+                          </p>
                         </div>
                      </div>
                    ))
                  )}
               </div>
-           </div>
+              )}
+            </div>
         </div>
       </div>
       {selectedPreviewFile && (
