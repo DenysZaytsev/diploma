@@ -155,7 +155,10 @@ router.get('/', protect, async (req, res) => {
         }
 
         // Завжди приховуємо чутливі дані типу хешу паролів
-        const users = await User.find(filter).select('_id fullName role department email');
+        const selectFields = req.user.role === 'admin' 
+            ? '_id fullName role department email isBlocked isSuperAdmin'
+            : '_id fullName role department email';
+        const users = await User.find(filter).select(selectFields);
         res.json(users);
     } catch (error) {
         console.error('Server error:', error);
