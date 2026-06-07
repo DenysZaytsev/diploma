@@ -9,10 +9,28 @@ const extractTextFromFile = async (filePath) => {
 
     try {
         if (ext === '.pdf') {
+            // pdf-parse needs canvas rendering elements defined globally on newer Node.js versions
+            if (!globalThis.DOMMatrix) globalThis.DOMMatrix = class {};
+            if (!globalThis.ImageData) globalThis.ImageData = class {};
+            if (!globalThis.Path2D) globalThis.Path2D = class {};
+
             const pdfParse = require('pdf-parse');
             const buffer = fs.readFileSync(fullPath);
-            const data = await pdfParse(buffer);
-            return data.text || '';
+            
+            let data;
+            if (typeof pdfParse === 'function') {
+                data = await pdfParse(buffer);
+            } else if (pdfParse && typeof pdfParse.PDFParse === 'function') {
+                // Handle different pdf-parse packaging layouts
+                const uint8 = new Uint8Array(buffer);
+                const instance = new pdfParse.PDFParse(uint8);
+                data = await instance.getText();
+            }
+
+            if (data) {
+                return typeof data === 'string' ? data : (data.text || '');
+            }
+            return '';
         }
 
         if (ext === '.docx') {

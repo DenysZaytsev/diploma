@@ -59,7 +59,7 @@ const deleteDocumentType = async (req, res) => {
 const updateDocumentType = async (req, res) => {
   try {
     const { name, description } = req.body;
-    const updated = await DocumentType.findByIdAndUpdate(req.params.id, { name, description }, { new: true, runValidators: true });
+    const updated = await DocumentType.findByIdAndUpdate(req.params.id, { name, description }, { returnDocument: 'after', runValidators: true });
     if (!updated) return res.status(404).json({ message: 'Не знайдено' });
     res.json(updated);
   } catch (error) {

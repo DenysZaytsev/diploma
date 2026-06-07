@@ -1,0 +1,214 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { API } from '../../api/client';
+import { 
+  FileText, 
+  Plus, 
+  Trash2, 
+  Edit3,
+  Search,
+  Loader2,
+  RotateCcw
+} from 'lucide-react';
+import TypeModal from '../../components/admin/TypeModal';
+import Pagination from '../../components/Pagination';
+
+interface DocumentType {
+  _id: string;
+  name: string;
+  description: string;
+}
+
+const DocumentTypes: React.FC = () => {
+  const [types, setTypes] = useState<DocumentType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingType, setEditingType] = useState<DocumentType | null>(null);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
+
+  const fetchTypes = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await API.get<DocumentType[]>('/document-types');
+      setTypes(data);
+    } catch (e) {
+      console.error('Failed to fetch types', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchTypes();
+  }, [fetchTypes]);
+
+  const filteredTypes = types.filter(t => 
+    t.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (t.description && t.description.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  const totalPages = Math.ceil(filteredTypes.length / itemsPerPage);
+  const paginatedTypes = filteredTypes.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const handleSave = async (data: { name: string; description: string }) => {
+    if (editingType) {
+      await API.patch(`/document-types/${editingType._id}`, data);
+    } else {
+      await API.post('/document-types', data);
+    }
+    await fetchTypes();
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (confirm(`Ви впевнені, що хочете видалити тип документа "${name}"?`)) {
+      try {
+        await API.delete(`/document-types/${id}`);
+        await fetchTypes();
+      } catch (e: any) {
+        alert(e.message || 'Помилка видалення');
+      }
+    }
+  };
+
+  const openAddModal = () => {
+    setEditingType(null);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (type: DocumentType) => {
+    setEditingType(type);
+    setIsModalOpen(true);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Типи документів</h1>
+          <p className="text-slate-500 mt-1 font-medium">Конфігурація категорій документації</p>
+        </div>
+        <button 
+          onClick={openAddModal}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-xl text-sm font-bold text-white hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all font-heading"
+        >
+          <Plus size={18} />
+          Додати тип
+        </button>
+      </div>
+
+      {/* Toolbar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+          <input 
+            type="text" 
+            placeholder="Пошук типів..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium"
+          />
+        </div>
+        <button 
+          onClick={() => {
+            setSearchQuery('');
+            setCurrentPage(1);
+          }}
+          className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all flex items-center justify-center font-bold"
+          title="Скинути пошук"
+        >
+          <RotateCcw size={18} />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px] flex flex-col">
+        <div className="flex-1 overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200">
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Назва типу</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Опис</th>
+                <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Дії</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr>
+                   <td colSpan={3} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                         <Loader2 className="animate-spin text-blue-600" size={24} />
+                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest italic">Завантаження...</p>
+                      </div>
+                   </td>
+                </tr>
+              ) : paginatedTypes.length === 0 ? (
+                <tr>
+                   <td colSpan={3} className="px-6 py-12 text-center text-slate-400 font-medium italic">Типів не знайдено</td>
+                </tr>
+              ) : paginatedTypes.map((type) => (
+                <tr key={type._id} className="hover:bg-slate-50 transition-colors group">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 bg-slate-100 rounded-lg flex items-center justify-center text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-500 transition-all">
+                        <FileText size={18} />
+                      </div>
+                      <span className="text-sm font-bold text-slate-900">{type.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <p className="text-sm text-slate-500 max-w-md truncate md:whitespace-normal md:line-clamp-2">
+                       {type.description || '—'}
+                    </p>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button 
+                        onClick={() => openEditModal(type)}
+                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all"
+                        title="Редагувати"
+                      >
+                        <Edit3 size={18} />
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(type._id, type.name)}
+                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all"
+                        title="Видалити"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <Pagination 
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filteredTypes.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
+      </div>
+
+      <TypeModal 
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSave={handleSave}
+        typeObj={editingType}
+      />
+    </div>
+  );
+};
+
+export default DocumentTypes;

@@ -42,7 +42,8 @@ const seedData = async () => {
             { name: 'IT відділ', description: 'Інформаційні технології та технічна підтримка' },
             { name: 'HR відділ', description: 'Управління персоналом та кадрова політика' },
             { name: 'Маркетинг', description: 'Маркетинг, реклама та PR' },
-            { name: 'Юридичний відділ', description: 'Юридичний супровід та договірна робота' }
+            { name: 'Юридичний відділ', description: 'Юридичний супровід та договірна робота' },
+            { name: 'Відділ розробки', description: 'Розробка програмного та апаратного забезпечення, R&D' }
         ];
         await Department.insertMany(depsData);
         console.log('Departments inserted');
@@ -50,7 +51,7 @@ const seedData = async () => {
         // ========== USERS ==========
         const users = [
             // IT (Admins)
-            { email: 'oleksandr-it@gmail.com', passwordHash, role: 'admin', fullName: 'Олександр Зайцев', department: 'IT відділ', isSuperAdmin: true },
+            { email: 'oleksandr-it@gmail.com', passwordHash, role: 'admin', fullName: 'Олександр Кравець', department: 'IT відділ', isSuperAdmin: true },
             { email: 'support-it@gmail.com', passwordHash, role: 'admin', fullName: 'Технічна Підтримка', department: 'IT відділ' },
             // Фінансовий відділ
             { email: 'olena-finance@gmail.com', passwordHash, role: 'approver', fullName: 'Олена Григоренко', department: 'Фінансовий відділ' },
@@ -67,6 +68,12 @@ const seedData = async () => {
             // HR
             { email: 'maria-hr@gmail.com', passwordHash, role: 'approver', fullName: 'Марія Коваль', department: 'HR відділ' },
             { email: 'serhiy-hr@gmail.com', passwordHash, role: 'employee', fullName: 'Сергій Павленко', department: 'HR відділ' },
+            // Відділ розробки
+            { email: 'manager-dev@gmail.com', passwordHash, role: 'approver', fullName: 'Дмитро Коваль', department: 'Відділ розробки' },
+            { email: 'sig-dev@gmail.com', passwordHash, role: 'signatory', fullName: 'Олексій Морозов', department: 'Відділ розробки' },
+            { email: 'fe-dev@gmail.com', passwordHash, role: 'employee', fullName: 'Іван Петренко (Frontend)', department: 'Відділ розробки' },
+            { email: 'be-dev@gmail.com', passwordHash, role: 'employee', fullName: 'Михайло Сидоренко (Backend)', department: 'Відділ розробки' },
+            { email: 'hw-dev@gmail.com', passwordHash, role: 'employee', fullName: 'Артем Шевченко (Hardware)', department: 'Відділ розробки' },
         ];
 
         const createdUsers = await User.insertMany(users);
@@ -189,7 +196,8 @@ const seedData = async () => {
             'IT відділ': 'ITD',
             'HR відділ': 'HRD',
             'Маркетинг': 'MRK',
-            'Юридичний відділ': 'LEG'
+            'Юридичний відділ': 'LEG',
+            'Відділ розробки': 'DEV'
         };
 
         // ========== GENERATE DOCUMENTS: 10 per status PER EMPLOYEE ==========

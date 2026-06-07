@@ -18,7 +18,8 @@ const {
   replaceFile,
   linkRelatedDocument,
   unlinkRelatedDocument,
-  bulkAction
+  bulkAction,
+  downloadFile
 } = require('../controllers/documentController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
@@ -37,6 +38,7 @@ router.route('/:id')
   .delete(protect, authorize('employee', 'admin'), deleteDocument);
 
 // Робота з файлами
+router.get('/:id/files/:filename/download', protect, downloadFile);
 router.post('/:id/files', protect, upload.array('files', 30), uploadFiles);
 router.delete('/:id/files/:fileId', protect, deleteFile);
 // Feature 1: Replace file (versioning)

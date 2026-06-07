@@ -21,7 +21,7 @@ router.get('/', protect, async (req, res) => {
 });
 
 // Створити делегування
-router.post('/', protect, authorize('approver', 'signatory'), async (req, res) => {
+router.post('/', protect, authorize('approver', 'signatory', 'employee'), async (req, res) => {
     try {
         const { delegateId, dateFrom, dateTo, reason } = req.body;
 
@@ -36,14 +36,18 @@ router.post('/', protect, authorize('approver', 'signatory'), async (req, res) =
         const delegate = await User.findById(delegateId);
         if (!delegate) return res.status(404).json({ message: 'Делегата не знайдено' });
 
-        if (delegate.department !== req.user.department) {
-            return res.status(400).json({ message: 'Делегат повинен бути з вашого відділу' });
+        if (delegate.role !== req.user.role) {
+            return res.status(400).json({ message: 'Делегувати повноваження можна лише користувачу з аналогічною роллю' });
+        }
+
+        if (req.user.role === 'employee' && delegate.department !== req.user.department) {
+            return res.status(400).json({ message: 'Працівники можуть делегувати обов\'язки лише колегам зі свого відділу' });
         }
 
         const delegation = await Delegation.create({
             delegator: req.user._id,
             delegate: delegateId,
-            department: req.user.department,
+            department: req.user.role === 'employee' ? req.user.department : delegate.department,
             role: req.user.role,
             dateFrom: new Date(dateFrom),
             dateTo: new Date(dateTo),
@@ -51,11 +55,16 @@ router.post('/', protect, authorize('approver', 'signatory'), async (req, res) =
         });
 
         // Сповіщення делегату
+        let roleName = 'колеги';
+        if (req.user.role === 'approver') roleName = 'погоджувача';
+        if (req.user.role === 'signatory') roleName = 'підписанта';
+        if (req.user.role === 'employee') roleName = 'працівника відділу';
+
         await Notification.create({
             recipient: delegateId,
             type: 'delegation',
             title: 'Нове делегування',
-            message: `${req.user.fullName} делегував вам повноваження ${req.user.role === 'approver' ? 'погоджувача' : 'підписанта'} з ${new Date(dateFrom).toLocaleDateString('uk-UA')} по ${new Date(dateTo).toLocaleDateString('uk-UA')}`
+            message: `${req.user.fullName} делегував вам повноваження ${roleName} з ${new Date(dateFrom).toLocaleDateString('uk-UA')} по ${new Date(dateTo).toLocaleDateString('uk-UA')}`
         });
 
         const populated = await Delegation.findById(delegation._id)

@@ -134,17 +134,28 @@ router.get('/confirm-email/:token', async (req, res) => {
     }
 });
 
-// Отримати список всіх користувачів (лише адмін, згідно з документацією)
-router.get('/', protect, authorize('admin'), async (req, res) => {
+// Отримати список користувачів (адмін бачить все, звичайні авторизовані користувачі бачать тільки публічні поля для вибору погоджувачів/підписантів)
+router.get('/', protect, async (req, res) => {
     try {
         const filter = {};
-        if (req.query.role) {
-            filter.role = req.query.role;
+        
+        // Звичайні користувачі не-адміни можуть бачити лише активних та непотрібні деталі приховані
+        if (req.user.role !== 'admin') {
+            filter.isBlocked = { $ne: true };
+            // Дозволяємо вибирати керівників, підписантів, адмінів та працівників
+            filter.role = { $in: ['approver', 'signatory', 'admin', 'employee'] };
+        } else {
+            if (req.query.role) {
+                filter.role = req.query.role;
+            }
         }
+
         if (req.query.department) {
             filter.department = req.query.department;
         }
-        const users = await User.find(filter).select('-passwordHash');
+
+        // Завжди приховуємо чутливі дані типу хешу паролів
+        const users = await User.find(filter).select('_id fullName role department email');
         res.json(users);
     } catch (error) {
         console.error('Server error:', error);
@@ -251,7 +262,7 @@ router.patch('/:id', protect, authorize('admin'), async (req, res) => {
         const user = await User.findByIdAndUpdate(
             req.params.id, 
             updateData, 
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         ).select('-passwordHash');
         
         if (changes.length > 0) {

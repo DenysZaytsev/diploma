@@ -67,7 +67,7 @@ const updateDepartment = async (req, res) => {
         await Document.updateMany({ department: dept.name }, { department: name });
     }
 
-    const updated = await Department.findByIdAndUpdate(req.params.id, { name, description }, { new: true, runValidators: true });
+    const updated = await Department.findByIdAndUpdate(req.params.id, { name, description }, { returnDocument: 'after', runValidators: true });
     res.json(updated);
   } catch (error) {
     res.status(500).json({ message: 'Помилка оновлення відділу' });

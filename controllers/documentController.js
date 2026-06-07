@@ -1,3 +1,4 @@
+const path = require('path');
 const crypto = require('crypto');
 const Document = require('../models/Document');
 const AuditLog = require('../models/AuditLog');
@@ -8,17 +9,46 @@ const Notification = require('../models/Notification');
 const Delegation = require('../models/Delegation');
 const { sendSystemEmail } = require('../utils/emailService');
 const { extractTextFromFiles } = require('../utils/textExtractor');
+const { sendToUser } = require('../utils/socket');
 
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const createAuditLog = async (documentId, userId, action, options = {}) => {
+  let comment = options.comment;
+  try {
+    const doc = await Document.findById(documentId).select('creator department status');
+    if (doc) {
+      const creatorId = doc.creator ? doc.creator.toString() : null;
+      if (creatorId && creatorId !== userId.toString()) {
+        const now = new Date();
+        const delegation = await Delegation.findOne({
+          delegator: creatorId,
+          delegate: userId,
+          isActive: true,
+          dateFrom: { $lte: now },
+          dateTo: { $gte: now }
+        }).populate('delegator', 'fullName');
+        if (delegation && delegation.delegator) {
+          const suffix = ` (за делегуванням від ${delegation.delegator.fullName})`;
+          if (!comment) {
+            comment = suffix.trim();
+          } else if (!comment.includes(suffix)) {
+            comment += suffix;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error in createAuditLog delegation append:', err);
+  }
+
   await AuditLog.create({
     document: documentId,
     user: userId,
     action,
     fromStatus: options.fromStatus,
     toStatus: options.toStatus,
-    comment: options.comment,
+    comment,
   });
 };
 
@@ -40,7 +70,18 @@ const logSystemAction = async (user, action, targetEmail, details) => {
 // Створення in-app notification
 const createNotification = async (recipientId, type, title, message, documentId = null) => {
     try {
-        await Notification.create({ recipient: recipientId, type, title, message, documentId });
+        const notif = await Notification.create({ recipient: recipientId, type, title, message, documentId });
+        
+        // Emit real-time socket event
+        sendToUser(recipientId, 'notification', {
+            _id: notif._id,
+            type,
+            title,
+            message,
+            documentId,
+            createdAt: notif.createdAt,
+            isRead: false
+        });
     } catch (err) {
         console.error('Notification Error:', err);
     }
@@ -59,9 +100,34 @@ const findActiveDelegate = async (department, role) => {
     return delegation ? delegation.delegate : null;
 };
 
+// Перевіряє, чи має користувач право редагувати чернетку (як автор або як активний делегат автора)
+const checkDraftEditAccess = async (document, user) => {
+    const creatorId = document.creator._id ? document.creator._id.toString() : document.creator.toString();
+    if (creatorId === user._id.toString()) {
+        return true;
+    }
+    
+    // Перевіряємо, чи є користувач активним делегатом автора (обидва мають бути employee з одного відділу)
+    if (user.role === 'employee') {
+        const now = new Date();
+        const delegation = await Delegation.findOne({
+            delegator: creatorId,
+            delegate: user._id,
+            role: 'employee',
+            isActive: true,
+            dateFrom: { $lte: now },
+            dateTo: { $gte: now }
+        });
+        if (delegation) {
+            return true;
+        }
+    }
+    return false;
+};
+
 const createDocument = async (req, res) => {
   try {
-    const { title, direction, type, counterparty, dueDate, tags, confidentiality } = req.body;
+    const { title, direction, type, counterparty, dueDate, tags, confidentiality, approverId, signatoryId, description } = req.body;
 
     let settings = await Settings.findOne();
     if (!settings) settings = { maxUploadFiles: 10 };
@@ -90,7 +156,7 @@ const createDocument = async (req, res) => {
     // Parse tags
     let parsedTags = [];
     if (tags) {
-        parsedTags = (typeof tags === 'string' ? tags.split(',') : tags).map(t => t.trim()).filter(Boolean);
+        parsedTags = (Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',') : [tags])).map(t => String(t).trim()).filter(Boolean);
     }
 
     let document;
@@ -100,8 +166,11 @@ const createDocument = async (req, res) => {
         document = await Document.create({
           title, direction, type, counterparty, dueDate,
           regNumber,
+          description: description || '',
           department: req.user.department || 'Без відділу',
           creator: req.user._id,
+          approver: approverId || null,
+          signatory: signatoryId || null,
           status: 'draft',
           files,
           tags: parsedTags,
@@ -138,7 +207,12 @@ const getDocuments = async (req, res) => {
   try {
     const filter = { isDeleted: false };
 
-    const { type, status, search, direction, department, deadlineBefore, createdFrom, createdTo, tags, confidentiality } = req.query;
+    const { type, status, search, direction, department, deadlineBefore, createdFrom, createdTo, tags, confidentiality, overdue, myDocs, inProgress } = req.query;
+
+    // Синхронізація статистики: якщо myDocs=true, показуємо лише документи поточного юзера
+    if (myDocs === 'true') {
+        filter.creator = req.user._id;
+    }
 
     if (type) filter.type = type;
     if (direction) filter.direction = direction;
@@ -146,6 +220,18 @@ const getDocuments = async (req, res) => {
     if (confidentiality) filter.confidentiality = confidentiality;
 
     if (deadlineBefore) filter.dueDate = { $lte: new Date(deadlineBefore) };
+
+    // "В роботі": статуси в процесі (без підписаних/архівних/чернеток/відхилених)
+    if (inProgress === 'true') {
+        filter.status = { $in: ['on_approval', 'on_signing'] };
+    }
+
+    // Прострочені: є дедлайн, він у минулому, і документ ще в роботі
+    if (overdue === 'true') {
+        filter.dueDate = { $lt: new Date(), $ne: null };
+        if (!filter.$and) filter.$and = [];
+        filter.$and.push({ status: { $nin: ['draft', 'signed', 'archived'] } });
+    }
 
     if (createdFrom || createdTo) {
         filter.createdAt = {};
@@ -164,27 +250,73 @@ const getDocuments = async (req, res) => {
       const matchingUsers = await User.find({ fullName: { $regex: safeSearch, $options: 'i' } }).select('_id');
       const userIds = matchingUsers.map(u => u._id);
 
-      filter.$or = [
-        { regNumber: { $regex: safeSearch, $options: 'i' } },
-        { title: { $regex: safeSearch, $options: 'i' } },
-        { counterparty: { $regex: safeSearch, $options: 'i' } },
-        { tags: { $regex: safeSearch, $options: 'i' } },
-        { textContent: { $regex: safeSearch, $options: 'i' } },
-        { creator: { $in: userIds } },
-        { approver: { $in: userIds } },
-        { signatory: { $in: userIds } }
-      ];
+      const searchConditions = {
+        $or: [
+          { regNumber: { $regex: safeSearch, $options: 'i' } },
+          { title: { $regex: safeSearch, $options: 'i' } },
+          { counterparty: { $regex: safeSearch, $options: 'i' } },
+          { tags: { $regex: safeSearch, $options: 'i' } },
+          { department: { $regex: safeSearch, $options: 'i' } },
+          { type: { $regex: safeSearch, $options: 'i' } },
+          { confidentiality: { $regex: safeSearch, $options: 'i' } },
+          { textContent: { $regex: safeSearch, $options: 'i' } },
+          { creator: { $in: userIds } },
+          { approver: { $in: userIds } },
+          { signatory: { $in: userIds } }
+        ]
+      };
+      if (!filter.$and) filter.$and = [];
+      filter.$and.push(searchConditions);
     }
 
     // Role-based access
     if (req.user.role === 'employee') {
-      filter.creator = req.user._id;
-      if (status) filter.status = status;
+      // Find active delegators for the current user
+      const now = new Date();
+      const activeDelegations = await Delegation.find({
+        delegate: req.user._id,
+        role: 'employee',
+        isActive: true,
+        dateFrom: { $lte: now },
+        dateTo: { $gte: now }
+      });
+      const delegatorIds = activeDelegations.map(d => d.delegator);
+      const ownAndDelegatedCreators = [req.user._id, ...delegatorIds];
+
+      if (myDocs === 'true') {
+        // Dashboard drill-down: show documents created by this user or delegated to them
+        filter.creator = { $in: ownAndDelegatedCreators };
+        if (status) {
+            if (!filter.$and) filter.$and = [];
+            filter.$and.push({ status });
+        }
+      } else {
+        // Normal registry: show own/delegated docs + signed/archived public docs from others
+        const accessConditions = {
+          $or: [
+              { creator: { $in: ownAndDelegatedCreators } },
+              { department: req.user.department, status: { $in: ['signed', 'archived'] }, confidentiality: { $in: ['public', 'internal'] } }
+          ]
+        };
+        if (!filter.$and) filter.$and = [];
+        filter.$and.push(accessConditions);
+        if (status) {
+            filter.$and.push({ status });
+        }
+      }
     } else {
       if (status) filter.status = status;
-      // Confidentiality filter: non-admins can only see 'secret' docs from their department
+      // Privacy and Confidentiality filter: hide drafts of others, and hide secret ops outside dept
       if (req.user.role !== 'admin') {
           if (!filter.$and) filter.$and = [];
+          
+          filter.$and.push({
+              $or: [
+                  { creator: req.user._id },
+                  { status: { $ne: 'draft' } }
+              ]
+          });
+
           filter.$and.push({
               $or: [
                   { confidentiality: { $ne: 'secret' } },
@@ -220,8 +352,30 @@ const getDocumentById = async (req, res) => {
       return res.status(404).json({ message: 'Document not found' });
     }
 
-    if (req.user.role === 'employee' && document.creator._id.toString() !== req.user._id.toString()) {
-        return res.status(403).json({ message: 'Access denied' });
+    const creatorId = document.creator._id ? document.creator._id.toString() : document.creator.toString();
+
+    if (req.user.role === 'employee') {
+        const isCreator = creatorId === req.user._id.toString();
+        const isPublic = ['signed', 'archived'].includes(document.status) && ['public', 'internal'].includes(document.confidentiality);
+        const hasDelegatedEdit = await checkDraftEditAccess(document, req.user);
+        if (!isCreator && !isPublic && !hasDelegatedEdit) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+    }
+
+    if (req.user.role !== 'admin' && document.status === 'draft') {
+        const hasDelegatedEdit = await checkDraftEditAccess(document, req.user);
+        if (creatorId !== req.user._id.toString() && !hasDelegatedEdit) {
+             return res.status(403).json({ message: 'Access denied to this draft' });
+        }
+    }
+    
+    if (req.user.role !== 'admin' && document.confidentiality === 'secret' && document.department !== req.user.department) {
+         // Якщо це секретний документ іншого відділу, але є активне делегування від автора — дозволяємо перегляд
+         const hasDelegatedEdit = await checkDraftEditAccess(document, req.user);
+         if (!hasDelegatedEdit) {
+             return res.status(403).json({ message: 'Access denied due to confidentiality' });
+         }
     }
 
     res.json(document);
@@ -232,15 +386,19 @@ const getDocumentById = async (req, res) => {
 
 const updateDocument = async (req, res) => {
   try {
-    const { title, counterparty, dueDate, tags, confidentiality } = req.body;
+    const { title, description, counterparty, dueDate, tags, confidentiality } = req.body;
     const doc = await Document.findById(req.params.id);
 
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
-    if (doc.creator.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Denied' });
+    
+    const hasAccess = await checkDraftEditAccess(doc, req.user);
+    if (!hasAccess) return res.status(403).json({ message: 'Denied' });
+    
     if (!['draft', 'rejected'].includes(doc.status)) return res.status(400).json({ message: 'Документ можна редагувати лише в статусі чернетки або коли його відхилено' });
 
     let changes = [];
     if (title && title !== doc.title) { changes.push('Назва'); doc.title = title; }
+    if (description !== undefined && description !== doc.description) { changes.push('Опис'); doc.description = description; }
     if (counterparty !== undefined && counterparty !== doc.counterparty) { changes.push('Контрагент'); doc.counterparty = counterparty; }
     if (dueDate !== undefined) {
         const newDate = dueDate ? new Date(dueDate) : null;
@@ -251,7 +409,7 @@ const updateDocument = async (req, res) => {
         }
     }
     if (tags !== undefined) {
-        const newTags = (typeof tags === 'string' ? tags.split(',') : (tags || [])).map(t => t.trim()).filter(Boolean);
+        const newTags = (Array.isArray(tags) ? tags : (typeof tags === 'string' ? tags.split(',') : [tags])).map(t => String(t).trim()).filter(Boolean);
         doc.tags = newTags;
         changes.push('Теги');
     }
@@ -279,7 +437,15 @@ const addComment = async (req, res) => {
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
 
     if (req.user.role === 'employee' && doc.creator.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Access denied' });
-    if (['approver', 'signatory'].includes(req.user.role) && req.user.department !== doc.department) return res.status(403).json({ message: 'Access denied' });
+    if (['approver', 'signatory'].includes(req.user.role) && req.user.department !== doc.department) {
+        const delegation = await Delegation.findOne({
+            delegate: req.user._id, department: doc.department, role: req.user.role,
+            isActive: true, dateFrom: { $lte: new Date() }, dateTo: { $gte: new Date() }
+        });
+        if (!delegation) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+    }
 
     await createAuditLog(doc._id, req.user._id, 'comment', { comment });
 
@@ -298,7 +464,10 @@ const submitDocument = async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
-    if (doc.creator.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Denied' });
+    
+    const hasAccess = await checkDraftEditAccess(doc, req.user);
+    if (!hasAccess) return res.status(403).json({ message: 'Denied' });
+    
     if (!['draft', 'rejected'].includes(doc.status)) return res.status(400).json({ message: 'Invalid status' });
 
     const oldStatus = doc.status;
@@ -338,19 +507,24 @@ const submitDocument = async (req, res) => {
 
 const approveDocument = async (req, res) => {
   try {
+    if (req.user.role === 'admin') return res.status(403).json({ message: 'Адміністратори не можуть здійснювати погодження або підписання документів' });
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
     if (doc.status !== 'on_approval') return res.status(400).json({ message: 'Document must be on approval' });
 
+    let isDelegated = false;
+    let delegatorName = '';
     // Check department access (own department + active delegation)
     if (req.user.role === 'approver' && doc.department !== req.user.department) {
         const delegation = await Delegation.findOne({
             delegate: req.user._id, department: doc.department, role: 'approver',
             isActive: true, dateFrom: { $lte: new Date() }, dateTo: { $gte: new Date() }
-        });
+        }).populate('delegator', 'fullName');
         if (!delegation) {
             return res.status(403).json({ message: 'Ви можете погоджувати документи лише свого відділу' });
         }
+        isDelegated = true;
+        delegatorName = delegation.delegator ? delegation.delegator.fullName : 'керівника';
     }
 
     doc.status = 'on_signing';
@@ -358,7 +532,12 @@ const approveDocument = async (req, res) => {
     await doc.save();
 
     await logSystemAction(req.user, 'Призначення документа', 'Підписант', `Документ ${doc.regNumber} (${doc.title}) погоджено та передано на підписання`);
-    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'on_approval', toStatus: 'on_signing', comment: 'Погоджено. Автоматично передано на підписання.' });
+    
+    let auditComment = 'Погоджено. Автоматично передано на підписання.';
+    if (isDelegated) {
+        auditComment += ` (за делегуванням від ${delegatorName})`;
+    }
+    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'on_approval', toStatus: 'on_signing', comment: auditComment });
 
     const docUrl = `${req.protocol}://${req.get('host')}/pages/document.html?id=${doc._id}`;
 
@@ -389,20 +568,38 @@ const approveDocument = async (req, res) => {
 
 const rejectDocument = async (req, res) => {
   try {
+    if (req.user.role === 'admin') return res.status(403).json({ message: 'Адміністратори не можуть здійснювати погодження або підписання документів' });
     const { comment } = req.body;
     if (!comment) return res.status(400).json({ message: 'Comment is required to reject' });
 
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
     if (!['on_approval', 'on_signing'].includes(doc.status)) return res.status(400).json({ message: 'Document must be on approval or on signing' });
+    
+    let isDelegated = false;
+    let delegatorName = '';
+
     if (req.user.role === 'approver' && doc.department !== req.user.department) {
         const delegation = await Delegation.findOne({
             delegate: req.user._id, department: doc.department, role: 'approver',
             isActive: true, dateFrom: { $lte: new Date() }, dateTo: { $gte: new Date() }
-        });
+        }).populate('delegator', 'fullName');
         if (!delegation) {
             return res.status(403).json({ message: 'Ви можете відхиляти документи лише свого відділу' });
         }
+        isDelegated = true;
+        delegatorName = delegation.delegator ? delegation.delegator.fullName : 'керівника';
+    }
+    if (req.user.role === 'signatory' && doc.department !== req.user.department) {
+        const delegation = await Delegation.findOne({
+            delegate: req.user._id, department: doc.department, role: 'signatory',
+            isActive: true, dateFrom: { $lte: new Date() }, dateTo: { $gte: new Date() }
+        }).populate('delegator', 'fullName');
+        if (!delegation) {
+            return res.status(403).json({ message: 'Ви можете відхиляти документи лише свого відділу' });
+        }
+        isDelegated = true;
+        delegatorName = delegation.delegator ? delegation.delegator.fullName : 'підписанта';
     }
 
     const oldStatus = doc.status;
@@ -417,7 +614,12 @@ const rejectDocument = async (req, res) => {
     const targetEmail = docWithPopulated.creator ? docWithPopulated.creator.email : 'Ініціатор';
 
     await logSystemAction(req.user, 'Призначення документа', targetEmail, `Документ ${doc.regNumber} (${doc.title}) відхилено та повернуто ініціатору`);
-    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: oldStatus, toStatus: 'rejected', comment });
+    
+    let auditComment = comment;
+    if (isDelegated) {
+        auditComment += ` (за делегуванням від ${delegatorName})`;
+    }
+    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: oldStatus, toStatus: 'rejected', comment: auditComment });
 
     const docUrl = `${req.protocol}://${req.get('host')}/pages/document.html?id=${doc._id}`;
 
@@ -438,17 +640,24 @@ const rejectDocument = async (req, res) => {
 
 const signDocument = async (req, res) => {
   try {
+    if (req.user.role === 'admin') return res.status(403).json({ message: 'Адміністратори не можуть здійснювати погодження або підписання документів' });
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
     if (doc.status !== 'on_signing') return res.status(400).json({ message: 'Document must be on signing first' });
+    
+    let isDelegated = false;
+    let delegatorName = '';
+
     if (req.user.role === 'signatory' && doc.department !== req.user.department) {
         const delegation = await Delegation.findOne({
             delegate: req.user._id, department: doc.department, role: 'signatory',
             isActive: true, dateFrom: { $lte: new Date() }, dateTo: { $gte: new Date() }
-        });
+        }).populate('delegator', 'fullName');
         if (!delegation) {
             return res.status(403).json({ message: 'Ви можете підписувати документи лише свого відділу' });
         }
+        isDelegated = true;
+        delegatorName = delegation.delegator ? delegation.delegator.fullName : 'підписанта';
     }
 
     doc.status = 'signed';
@@ -456,7 +665,12 @@ const signDocument = async (req, res) => {
     await doc.save();
 
     await logSystemAction(req.user, 'Призначення документа', 'Архів / Система', `Документ ${doc.regNumber} (${doc.title}) успішно підписано КЕП`);
-    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'on_signing', toStatus: 'signed', comment: 'Накладено КЕП' });
+    
+    let auditComment = 'Накладено КЕП';
+    if (isDelegated) {
+        auditComment += ` (за делегуванням від ${delegatorName})`;
+    }
+    await createAuditLog(doc._id, req.user._id, 'status_change', { fromStatus: 'on_signing', toStatus: 'signed', comment: auditComment });
 
     const docUrl = `${req.protocol}://${req.get('host')}/pages/document.html?id=${doc._id}`;
 
@@ -514,7 +728,10 @@ const uploadFiles = async (req, res) => {
   try {
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
-    if (doc.creator.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Denied' });
+    
+    const hasAccess = await checkDraftEditAccess(doc, req.user);
+    if (!hasAccess) return res.status(403).json({ message: 'Denied' });
+    
     if (!['draft', 'rejected'].includes(doc.status)) return res.status(400).json({ message: 'Cannot attach files at this stage' });
 
     if (req.files) {
@@ -557,7 +774,10 @@ const replaceFile = async (req, res) => {
     try {
         const doc = await Document.findById(req.params.id);
         if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
-        if (doc.creator.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Denied' });
+        
+        const hasAccess = await checkDraftEditAccess(doc, req.user);
+        if (!hasAccess) return res.status(403).json({ message: 'Denied' });
+        
         if (!['draft', 'rejected'].includes(doc.status)) return res.status(400).json({ message: 'Cannot replace files at this stage' });
 
         const fileIndex = doc.files.findIndex(f => f._id.toString() === req.params.fileId);
@@ -608,6 +828,11 @@ const linkRelatedDocument = async (req, res) => {
         const doc = await Document.findById(req.params.id);
         if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
 
+        const hasAccess = await checkDraftEditAccess(doc, req.user);
+        if (!hasAccess && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Denied' });
+        }
+
         const { relatedId } = req.body;
         if (!relatedId) return res.status(400).json({ message: 'relatedId required' });
 
@@ -625,6 +850,7 @@ const linkRelatedDocument = async (req, res) => {
         }
 
         await createAuditLog(doc._id, req.user._id, 'update', { comment: `Пов'язано з документом ${related.regNumber}` });
+        await createAuditLog(related._id, req.user._id, 'update', { comment: `Пов'язано з документом ${doc.regNumber}` });
 
         res.json(doc);
     } catch (error) {
@@ -637,6 +863,11 @@ const unlinkRelatedDocument = async (req, res) => {
         const doc = await Document.findById(req.params.id);
         if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
 
+        const hasAccess = await checkDraftEditAccess(doc, req.user);
+        if (!hasAccess && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Denied' });
+        }
+
         const relatedId = req.params.relatedId;
         doc.relatedDocuments = doc.relatedDocuments.filter(id => id.toString() !== relatedId);
         await doc.save();
@@ -646,6 +877,11 @@ const unlinkRelatedDocument = async (req, res) => {
         if (related) {
             related.relatedDocuments = related.relatedDocuments.filter(id => id.toString() !== doc._id.toString());
             await related.save();
+        }
+
+        await createAuditLog(doc._id, req.user._id, 'update', { comment: `Скасовано зв'язок з документом ${related ? related.regNumber : relatedId}` });
+        if (related) {
+            await createAuditLog(related._id, req.user._id, 'update', { comment: `Скасовано зв'язок з документом ${doc.regNumber}` });
         }
 
         res.json(doc);
@@ -722,7 +958,8 @@ const getDocumentAudit = async (req, res) => {
         const doc = await Document.findById(req.params.id);
         if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
 
-        if (req.user.role === 'employee' && doc.creator.toString() !== req.user._id.toString()) {
+        const hasAccess = await checkDraftEditAccess(doc, req.user);
+        if (req.user.role === 'employee' && !hasAccess) {
             return res.status(403).json({ message: 'Access denied' });
         }
 
@@ -739,6 +976,9 @@ const deleteDocument = async (req, res) => {
     try {
         const doc = await Document.findById(req.params.id);
         if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
+
+        const hasAccess = await checkDraftEditAccess(doc, req.user);
+        if (!hasAccess && req.user.role !== 'admin') return res.status(403).json({ message: 'Denied' });
 
         if (req.user.role === 'employee' && doc.status !== 'draft') {
             return res.status(403).json({ message: 'Only drafts can be deleted' });
@@ -759,7 +999,8 @@ const deleteFile = async (req, res) => {
         const doc = await Document.findById(req.params.id);
         if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Document not found' });
 
-        if (req.user.role === 'employee' && doc.creator.toString() !== req.user._id.toString()) {
+        const hasAccess = await checkDraftEditAccess(doc, req.user);
+        if (!hasAccess && req.user.role !== 'admin') {
             return res.status(403).json({ message: 'Access denied' });
         }
         if (!['draft', 'rejected'].includes(doc.status)) {
@@ -780,7 +1021,47 @@ const deleteFile = async (req, res) => {
     }
 };
 
+const downloadFile = async (req, res) => {
+    try {
+        const doc = await Document.findById(req.params.id)
+            .populate('creator', '_id department');
+            
+        if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
+        
+        // RDAC: Admins and SuperAdmins cannot download or view document content
+        if (req.user.role === 'admin') {
+            return res.status(403).json({ message: 'Адміністраторам заборонено скачувати або переглядати вміст документів згідно з політикою RDAC' });
+        }
+
+        if (req.user.role === 'employee') {
+            const isCreator = doc.creator._id.toString() === req.user._id.toString();
+            const isPublic = ['signed', 'archived'].includes(doc.status) && ['public', 'internal'].includes(doc.confidentiality);
+            if (!isCreator && !isPublic) {
+                return res.status(403).json({ message: 'Access denied' });
+            }
+        }
+        
+        if (req.user.role !== 'admin' && doc.status === 'draft') {
+            if (doc.creator._id.toString() !== req.user._id.toString()) {
+                 return res.status(403).json({ message: 'Access denied' });
+            }
+        }
+        
+        if (req.user.role !== 'admin' && doc.confidentiality === 'secret' && doc.department !== req.user.department) {
+             return res.status(403).json({ message: 'Access denied' });
+        }
+
+        const filename = req.params.filename;
+        const filePath = path.join(__dirname, '../uploads', filename);
+        
+        res.download(filePath);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 module.exports = {
+  downloadFile,
   createDocument,
   getDocuments,
   getDocumentById,

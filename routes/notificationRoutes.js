@@ -33,7 +33,7 @@ router.patch('/:id/read', protect, async (req, res) => {
         const notif = await Notification.findOneAndUpdate(
             { _id: req.params.id, recipient: req.user._id },
             { isRead: true },
-            { new: true }
+            { returnDocument: 'after' }
         );
         if (!notif) return res.status(404).json({ message: 'Не знайдено' });
         res.json(notif);

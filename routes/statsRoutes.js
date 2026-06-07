@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Document = require('../models/Document');
 const AuditLog = require('../models/AuditLog');
+const Delegation = require('../models/Delegation');
 const { protect } = require('../middleware/authMiddleware');
 
 // @desc    Get stats for dashboard
@@ -9,15 +10,26 @@ const { protect } = require('../middleware/authMiddleware');
 // @access  Private
 router.get('/', protect, async (req, res) => {
   try {
+    const now = new Date();
     const filter = { isDeleted: false };
+
+    // Знаходимо департаменти на які є делегування
+    const myDelegations = await Delegation.find({
+        delegate: req.user._id,
+        isActive: true,
+        dateFrom: { $lte: now },
+        dateTo: { $gte: now }
+    });
+    const delegatedDepts = myDelegations.map(d => d.department);
+    const accessibleDepts = [req.user.department, ...delegatedDepts].filter(Boolean);
 
     if (req.user.role === 'employee') {
       filter.creator = req.user._id;
     } else if (req.user.role === 'approver') {
-      filter.department = req.user.department;
+      filter.department = { $in: accessibleDepts };
     } else if (req.user.role === 'signatory') {
       filter.status = 'on_signing';
-      filter.department = req.user.department;
+      filter.department = { $in: accessibleDepts };
     }
 
     const totalDocs = await Document.countDocuments(filter);
@@ -27,8 +39,8 @@ router.get('/', protect, async (req, res) => {
     const outgoingDocs = await Document.countDocuments({ ...filter, direction: 'outgoing' });
     const internalDocs = await Document.countDocuments({ ...filter, direction: 'internal' });
 
-    // В роботі
-    const inProgressDocs = await Document.countDocuments({ ...filter, status: { $nin: ['draft', 'rejected'] } });
+    // В роботі — тільки ті що реально в процесі (без підписаних/архівних)
+    const inProgressDocs = await Document.countDocuments({ ...filter, status: { $in: ['on_approval', 'on_signing'] } });
 
     // Деталізація за статусами
     const statusDraft = await Document.countDocuments({ ...filter, status: 'draft' });
@@ -41,15 +53,16 @@ router.get('/', protect, async (req, res) => {
     // Feature 5: Overdue count
     const overdueDocs = await Document.countDocuments({
         ...filter,
-        dueDate: { $lt: new Date() },
+        dueDate: { $lt: now },
         status: { $nin: ['signed', 'archived', 'draft'] }
     });
 
-    // Feature 12: Average approval time (in hours) — from on_approval to on_signing
+    // Analytics
     let avgApprovalTime = null;
     let rejectionRate = null;
 
     try {
+        // Average approval time calculation (simplified check)
         const approvalTimes = await AuditLog.aggregate([
             { $match: { action: 'status_change', toStatus: 'on_signing' } },
             { $lookup: {
@@ -71,10 +84,9 @@ router.get('/', protect, async (req, res) => {
             { $group: { _id: null, avgTime: { $avg: '$timeDiff' } } }
         ]);
         if (approvalTimes.length > 0) {
-            avgApprovalTime = Math.round(approvalTimes[0].avgTime / (1000 * 60 * 60) * 10) / 10; // hours
+            avgApprovalTime = Math.round(approvalTimes[0].avgTime / (1000 * 60 * 60) * 10) / 10;
         }
 
-        // Rejection rate
         const totalProcessed = statusSigned + statusArchived + statusRejected;
         if (totalProcessed > 0) {
             rejectionRate = Math.round((statusRejected / totalProcessed) * 100 * 10) / 10;
@@ -83,10 +95,34 @@ router.get('/', protect, async (req, res) => {
         console.error('Stats aggregation error:', e);
     }
 
-    // Feature 12: Recent activity feed (last 10 actions)
+    // Feature 12 & Hardening: Privacy-aware activity feed
     let recentActivity = [];
     try {
-        recentActivity = await AuditLog.find({})
+        // Рівень доступу для стрічки активності
+        let activityFilter = {};
+        if (req.user.role === 'admin') {
+            activityFilter = {}; // Адмін бачить все
+        } else if (req.user.role === 'employee') {
+            // Бачить активність лише по деж. доступним документам
+            const permittedDocs = await Document.find({
+                $or: [
+                    { creator: req.user._id },
+                    { status: { $in: ['signed', 'archived'] }, confidentiality: { $in: ['public', 'internal'] } }
+                ]
+            }).select('_id');
+            activityFilter = { document: { $in: permittedDocs.map(d => d._id) } };
+        } else {
+            // Approver/Signatory бачить свій департамент + делеговані
+            const permittedDocs = await Document.find({
+                $or: [
+                    { department: { $in: accessibleDepts } },
+                    { creator: req.user._id }
+                ]
+            }).select('_id');
+            activityFilter = { document: { $in: permittedDocs.map(d => d._id) } };
+        }
+
+        recentActivity = await AuditLog.find(activityFilter)
             .populate('user', 'fullName')
             .populate('document', 'regNumber title')
             .sort({ createdAt: -1 })

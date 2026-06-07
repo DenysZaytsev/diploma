@@ -17,7 +17,7 @@ const delegationSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['approver', 'signatory'],
+    enum: ['approver', 'signatory', 'employee'],
     required: true
   },
   dateFrom: {
