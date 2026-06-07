@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { API } from '../api/client';
+import Modal from '../components/Modal';
 import { 
   Search, 
   Download, 
@@ -48,6 +49,8 @@ const Registry: React.FC = () => {
   const [types, setTypes] = useState<{name: string, code: string}[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<null | { succeeded: string[]; failed: { id: string; reason: string }[] }>(null);
+  const [isResultModalOpen, setResultModalOpen] = useState(false);
   const [sortField, setSortField] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
@@ -57,6 +60,23 @@ const Registry: React.FC = () => {
     } else {
       setSortField(field);
       setSortDirection('asc');
+    }
+  };
+
+  const handleBulkSubmit = async () => {
+    if (!confirm(`Надіслати на погодження ${selectedDocs.length} документів?`)) return;
+    setBulkLoading(true);
+    try {
+      const result = await API.post('/documents/bulk', { documentIds: selectedDocs, action: 'submit' });
+      // Expected result shape { succeeded: [], failed: [{id, reason}] }
+      setBulkResult(result);
+      setResultModalOpen(true);
+      setSelectedDocs([]);
+      await fetchDocuments();
+    } catch (e: any) {
+      alert(e.message || 'Помилка масової подачі');
+    } finally {
+      setBulkLoading(false);
     }
   };
 
@@ -331,20 +351,7 @@ const Registry: React.FC = () => {
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={async () => {
-                if (confirm(`Надіслати на погодження ${selectedDocs.length} документів?`)) {
-                  setBulkLoading(true);
-                  try {
-                    await API.post('/documents/bulk', { documentIds: selectedDocs, action: 'submit' });
-                    setSelectedDocs([]);
-                    await fetchDocuments();
-                  } catch (e: any) {
-                    alert(e.message || 'Помилка масової подачі');
-                  } finally {
-                    setBulkLoading(false);
-                  }
-                }
-              }}
+              onClick={handleBulkSubmit}
               disabled={bulkLoading || selectedDocs.some(id => {
                 const doc = documents.find(d => d._id === id);
                 return !doc || !['draft', 'rejected'].includes(doc.status);
@@ -429,7 +436,7 @@ const Registry: React.FC = () => {
                   </div>
                 </th>
                 <th 
-                  className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors select-none text-center"
+                  className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest cursor-pointer hover:text-slate-600 transition-colors select-none text-center whitespace-nowrap w-32 min-w-[120px]"
                   onClick={() => handleSort('status')}
                 >
                   <div className="flex items-center justify-center gap-1">
@@ -531,9 +538,9 @@ const Registry: React.FC = () => {
                       </span>
                     </div>
                   </td>
-                  <td className="px-6 py-5 text-center">
+                  <td className="px-6 py-5 text-center w-32 min-w-[120px]">
                     <span className={cn(
-                      "px-3 py-1 rounded-full text-[11px] font-bold tracking-wide uppercase border",
+                      "px-3 py-1 rounded-full text-[11px] font-bold tracking-wide uppercase border whitespace-nowrap",
                       statusColors[doc.status] || 'bg-slate-100 text-slate-600 border-slate-200'
                     )}>
                       {translateStatus(doc.status)}
@@ -616,6 +623,34 @@ const Registry: React.FC = () => {
            </div>
         </div>
       </div>
+    {isResultModalOpen && bulkResult && (
+        <Modal
+          isOpen={isResultModalOpen}
+          onClose={() => setResultModalOpen(false)}
+          title="Результат подачі"
+          size="md"
+          footer={(
+            <button
+              onClick={() => setResultModalOpen(false)}
+              className="px-4 py-2 bg-blue-600 text-white rounded"
+            >
+              Закрити
+            </button>
+          )}
+        >
+          <p>Успішно подано: {bulkResult.succeeded.length}</p>
+          {bulkResult.failed.length > 0 && (
+            <div className="mt-2">
+              <p className="font-semibold">Не успішно:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                {bulkResult.failed.map(f => (
+                  <li key={f.id}>{f.id}: {f.reason}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </Modal>
+      )}
     </div>
   );
 };

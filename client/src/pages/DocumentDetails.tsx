@@ -82,6 +82,7 @@ const DocumentDetails: React.FC = () => {
   const { user: currentUser } = useAuth();
   const [doc, setDoc] = useState<DocumentDetails | null>(null);
   const [audit, setAudit] = useState<AuditLog[]>([]);
+  const [activeTab, setActiveTab] = useState<'details' | 'audit'>('details');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [selectedPreviewFile, setSelectedPreviewFile] = useState<{ _id: string; originalName: string; mimeType: string; path: string } | null>(null);
@@ -200,6 +201,33 @@ const DocumentDetails: React.FC = () => {
           >
             <ArrowLeft size={20} />
           </button>
+          {/* Tab Navigation */}
+            <div className="flex border-b border-slate-200 mb-4">
+              <button
+                type="button"
+                onClick={() => setActiveTab('details')}
+                className={cn(
+                  "px-4 py-2 -mb-px border-b-2",
+                  activeTab === 'details'
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-slate-600 hover:text-slate-800"
+                )}
+              >
+                Документ
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('audit')}
+                className={cn(
+                  "px-4 py-2 -mb-px border-b-2",
+                  activeTab === 'audit'
+                    ? "border-blue-600 text-blue-600"
+                    : "border-transparent text-slate-600 hover:text-slate-800"
+                )}
+              >
+                Журнал аудиту
+              </button>
+            </div>
           <div>
             <div className="flex items-center gap-3">
               <span className="text-xs font-semibold text-slate-500 tracking-wider bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">{doc.regNumber}</span>
@@ -438,251 +466,253 @@ const DocumentDetails: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-8">
-             <div className="grid grid-cols-2 lg:grid-cols-5 gap-8">
-                {[
-                  { label: 'Тип документа', value: types.find(t => t.code === doc.type)?.name || doc.type, icon: FileText },
-                  { label: 'Напрямок', value: translateDirection(doc.direction), icon: Shield },
-                  { label: 'Гриф доступу', value: translateConfidentiality(doc.confidentiality), icon: Shield },
-                  { label: 'Дата реєстрації', value: new Date(doc.createdAt).toLocaleDateString('uk-UA'), icon: Clock },
-                  { label: 'Дедлайн', value: doc.dueDate ? new Date(doc.dueDate).toLocaleDateString('uk-UA') : 'Не вказано', icon: Calendar, warn: !!doc.dueDate && new Date(doc.dueDate) < new Date() }
-                ].map((item, i) => (
-                  <div key={i}>
-                     <div className="flex items-center gap-1.5 text-slate-400 mb-1.5">
-                       <item.icon size={14} />
-                       <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
-                     </div>
-                     <p className={cn("text-sm font-bold", item.warn ? "text-red-500" : "text-slate-900")}>{item.value}</p>
-                  </div>
-                ))}
-              </div>
-
-             <div className="pt-8 border-t border-slate-100">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Опис документа</h3>
-                {isEditing ? (
-                  <textarea 
-                    className="w-full h-32 px-4 py-3 border border-blue-500 rounded-xl focus:ring-2 focus:ring-blue-500/20 outline-none resize-none text-slate-800" 
-                    value={editDescription} 
-                    onChange={(e) => setEditDescription(e.target.value)} 
-                  />
-                ) : (
-                  <p className="text-slate-700 leading-relaxed">{doc.description || 'Опис відсутній'}</p>
-                )}
-             </div>
+        {activeTab === 'details' && (
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-8">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-8">
+                  {[
+                    { label: 'Тип документа', value: types.find(t => t.code === doc.type)?.name || doc.type, icon: FileText },
+                    { label: 'Напрямок', value: translateDirection(doc.direction), icon: Shield },
+                    { label: 'Гриф доступу', value: translateConfidentiality(doc.confidentiality), icon: Shield },
+                    { label: 'Дата реєстрації', value: new Date(doc.createdAt).toLocaleDateString('uk-UA'), icon: Clock },
+                    { label: 'Дедлайн', value: doc.dueDate ? new Date(doc.dueDate).toLocaleDateString('uk-UA') : 'Не вказано', icon: Calendar, warn: !!doc.dueDate && new Date(doc.dueDate) < new Date() }
+                  ].map((item, i) => (
+                    <div key={i}>
+                      <div className="flex items-center gap-1.5 text-slate-400 mb-1.5">
+                        <item.icon size={14} />
+                        <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
+                      </div>
+                      <p className={cn("text-sm font-bold", item.warn ? "text-red-500" : "text-slate-900")}>{item.value}</p>
+                    </div>
+                  ))}
+                </div>
 
               <div className="pt-8 border-t border-slate-100">
-                 <div className="flex justify-between items-center mb-4">
-                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Файли та вкладення</h3>
-                   {['draft', 'rejected'].includes(doc.status) && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin') && (
-                     <label className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl text-xs font-bold transition-all border border-blue-100">
-                       <Plus size={14} />
-                       Додати файли
-                       <input 
-                         type="file" 
-                         multiple 
-                         className="hidden" 
-                         onChange={async (e) => {
-                           if (e.target.files && e.target.files.length > 0) {
-                             const formData = new FormData();
-                             for (let i = 0; i < e.target.files.length; i++) {
-                               formData.append('files', e.target.files[i]);
-                             }
-                             try {
-                               setActionLoading('upload');
-                               await API.upload(`/documents/${doc._id}/files`, formData);
-                               await fetchDetails();
-                             } catch (err: any) {
-                               alert(err.message || 'Помилка завантаження файлів');
-                             } finally {
-                               setActionLoading(null);
-                             }
-                           }
-                         }}
-                       />
-                     </label>
-                   )}
-                 </div>
-                 <div className="space-y-4">
-                   {(!doc.files || doc.files.length === 0) ? (
-                     <p className="text-sm text-slate-400 italic">Файли не додано</p>
-                   ) : (
-                     doc.files.map((f) => (
-                       <div key={f._id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3 group">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                               <div className="p-3 bg-white rounded-xl border border-slate-200 group-hover:border-blue-200 group-hover:bg-blue-50 transition-all">
-                                  <FileText className="text-blue-600" />
-                               </div>
-                               <div>
-                                  <p className="text-sm font-bold text-slate-900 truncate max-w-[200px] sm:max-w-[400px]">{f.originalName}</p>
-                                  <p className="text-xs text-slate-500">Версія {f.version || 1} • {(f.size / 1024 / 1024).toFixed(2)} MB</p>
-                               </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                               {canViewFiles && (
-                                 <>
-                                   <button 
-                                     onClick={() => setSelectedPreviewFile(f)}
-                                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"
-                                     title="Переглянути"
-                                   >
-                                     <Eye size={18} />
-                                   </button>
-                                   <a 
-                                     href={`http://localhost:5001/api/documents/${doc._id}/files/${f.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
-                                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"
-                                     title="Скачати"
-                                   >
-                                     <Download size={18} />
-                                   </a>
-                                   {['draft', 'rejected'].includes(doc.status) && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin') && (
-                                     <>
-                                       <label className="cursor-pointer p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all flex items-center justify-center" title="Завантажити нову версію">
-                                         <Upload size={18} />
-                                         <input 
-                                           type="file" 
-                                           className="hidden" 
-                                           onChange={async (e) => {
-                                             if (e.target.files && e.target.files.length > 0) {
-                                               const formData = new FormData();
-                                               formData.append('files', e.target.files[0]);
-                                               try {
-                                                 setActionLoading('replace');
-                                                 await API.upload(`/documents/${doc._id}/files/${f._id}`, formData, 'PUT');
-                                                 await fetchDetails();
-                                               } catch (err: any) {
-                                                 alert(err.message || 'Помилка завантаження нової версії');
-                                               } finally {
-                                                 setActionLoading(null);
-                                               }
-                                             }
-                                           }}
-                                         />
-                                       </label>
-                                       <button 
-                                         onClick={async () => {
-                                           if (confirm(`Ви впевнені, що хочете видалити файл "${f.originalName}"?`)) {
-                                             try {
-                                               await API.delete(`/documents/${doc._id}/files/${f._id}`);
-                                               await fetchDetails();
-                                             } catch (e: any) {
-                                               alert(e.message || 'Не вдалося видалити файл');
-                                             }
-                                           }
-                                         }}
-                                         className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all"
-                                         title="Видалити файл"
-                                       >
-                                         <Trash2 size={18} />
-                                       </button>
-                                     </>
-                                   )}
-                                 </>
-                               )}
-                            </div>
-                          </div>
-
-                          {/* Historical versions */}
-                          {doc.fileVersions && doc.fileVersions.filter(fv => fv.fileId === f._id).length > 0 && (
-                            <div className="mt-1 pt-2 border-t border-slate-100 space-y-1.5 pl-2">
-                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Історія версій:</p>
-                              <div className="space-y-1">
-                                {doc.fileVersions.filter(fv => fv.fileId === f._id).map((fv) => (
-                                  <div key={fv._id} className="flex items-center justify-between text-xs text-slate-500 bg-white/50 px-3 py-1.5 rounded-lg border border-slate-100">
-                                    <span className="font-medium">Версія {fv.version} (від {fv.uploadedBy?.fullName || 'Система'})</span>
-                                    <div className="flex items-center gap-3">
-                                      <span className="text-[10px] font-mono">{(fv.size / 1024 / 1024).toFixed(2)} MB</span>
-                                      {canViewFiles && (
-                                        <a 
-                                          href={`http://localhost:5001/api/documents/${doc._id}/files/${fv.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
-                                          className="text-blue-500 hover:text-blue-700 hover:underline flex items-center gap-1 font-semibold text-[11px]"
-                                        >
-                                          <Download size={12} />
-                                          Скачати v{fv.version}
-                                        </a>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                       </div>
-                     ))
-                   )}
-                 </div>
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">Опис документа</h3>
+                  {isEditing ? (
+                    <textarea 
+                      className="w-full h-32 px-4 py-3 border border-blue-500 rounded-xl focus:ring-2 focus:ring-blue-500/20 outline-none resize-none text-slate-800" 
+                      value={editDescription} 
+                      onChange={(e) => setEditDescription(e.target.value)} 
+                    />
+                  ) : (
+                    <p className="text-slate-700 leading-relaxed">{doc.description || 'Опис відсутній'}</p>
+                  )}
               </div>
 
-               {/* Пов'язані документи */}
-               <div className="pt-8 border-t border-slate-100">
+                <div className="pt-8 border-t border-slate-100">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Пов'язані документи</h3>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Файли та вкладення</h3>
                     {['draft', 'rejected'].includes(doc.status) && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin') && (
-                      <button 
-                        onClick={() => {
-                          setIsLinkModalOpen(true);
-                          fetchAvailableDocuments();
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl text-xs font-bold transition-all border border-blue-100"
-                      >
+                      <label className="cursor-pointer flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl text-xs font-bold transition-all border border-blue-100">
                         <Plus size={14} />
-                        Додати зв'язок
-                      </button>
+                        Додати файли
+                        <input 
+                          type="file" 
+                          multiple 
+                          className="hidden" 
+                          onChange={async (e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              const formData = new FormData();
+                              for (let i = 0; i < e.target.files.length; i++) {
+                                formData.append('files', e.target.files[i]);
+                              }
+                              try {
+                                setActionLoading('upload');
+                                await API.upload(`/documents/${doc._id}/files`, formData);
+                                await fetchDetails();
+                              } catch (err: any) {
+                                alert(err.message || 'Помилка завантаження файлів');
+                              } finally {
+                                setActionLoading(null);
+                              }
+                            }
+                          }}
+                        />
+                      </label>
                     )}
                   </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {(!doc.relatedDocuments || doc.relatedDocuments.length === 0) ? (
-                      <p className="text-sm text-slate-400 italic col-span-2">Пов'язаних документів не знайдено</p>
+                  <div className="space-y-4">
+                    {(!doc.files || doc.files.length === 0) ? (
+                      <p className="text-sm text-slate-400 italic">Файли не додано</p>
                     ) : (
-                      doc.relatedDocuments.map((rd) => (
-                        <div key={rd._id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between group">
-                           <div className="flex items-center gap-3 min-w-0">
-                             <FileText className="text-slate-400 shrink-0" size={16} />
-                             <div className="min-w-0">
-                               <p 
-                                 onClick={() => navigate(`/document/${rd._id}`)}
-                                 className="text-sm font-bold text-slate-800 hover:text-blue-600 cursor-pointer transition-colors truncate"
-                               >
-                                 {rd.regNumber} — {rd.title}
-                               </p>
-                               <div className="mt-1">
-                                 <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded uppercase font-bold text-slate-600 tracking-wider">
-                                   {translateStatus(rd.status)}
-                                 </span>
-                               </div>
-                             </div>
-                           </div>
-                           
-                           {['draft', 'rejected'].includes(doc.status) && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin') && (
-                             <button 
-                               onClick={async () => {
-                                 if (confirm(`Ви впевнені, що хочете розірвати зв'язок з документом "${rd.regNumber}"?`)) {
-                                   try {
-                                     setActionLoading('unlink');
-                                     await API.delete(`/documents/${doc._id}/related/${rd._id}`);
-                                     await fetchDetails();
-                                   } catch (err: any) {
-                                     alert(err.message || 'Не вдалося розірвати зв\'язок');
-                                   } finally {
-                                     setActionLoading(null);
-                                   }
-                                 }
-                               }}
-                               className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all shrink-0"
-                               title="Розірвати зв'язок"
-                             >
-                               <Trash2 size={16} />
-                             </button>
-                           )}
+                      doc.files.map((f) => (
+                        <div key={f._id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col gap-3 group">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <div className="p-3 bg-white rounded-xl border border-slate-200 group-hover:border-blue-200 group-hover:bg-blue-50 transition-all">
+                                    <FileText className="text-blue-600" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-bold text-slate-900 truncate max-w-[200px] sm:max-w-[400px]">{f.originalName}</p>
+                                    <p className="text-xs text-slate-500">Версія {f.version || 1} • {(f.size / 1024 / 1024).toFixed(2)} MB</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {canViewFiles && (
+                                  <>
+                                    <button 
+                                      onClick={() => setSelectedPreviewFile(f)}
+                                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"
+                                      title="Переглянути"
+                                    >
+                                      <Eye size={18} />
+                                    </button>
+                                    <a 
+                                      href={`http://localhost:5001/api/documents/${doc._id}/files/${f.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
+                                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"
+                                      title="Скачати"
+                                    >
+                                      <Download size={18} />
+                                    </a>
+                                    {['draft', 'rejected'].includes(doc.status) && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin') && (
+                                      <>
+                                        <label className="cursor-pointer p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all flex items-center justify-center" title="Завантажити нову версію">
+                                          <Upload size={18} />
+                                          <input 
+                                            type="file" 
+                                            className="hidden" 
+                                            onChange={async (e) => {
+                                              if (e.target.files && e.target.files.length > 0) {
+                                                const formData = new FormData();
+                                                formData.append('files', e.target.files[0]);
+                                                try {
+                                                  setActionLoading('replace');
+                                                  await API.upload(`/documents/${doc._id}/files/${f._id}`, formData, 'PUT');
+                                                  await fetchDetails();
+                                                } catch (err: any) {
+                                                  alert(err.message || 'Помилка завантаження нової версії');
+                                                } finally {
+                                                  setActionLoading(null);
+                                                }
+                                              }
+                                            }}
+                                          />
+                                        </label>
+                                        <button 
+                                          onClick={async () => {
+                                            if (confirm(`Ви впевнені, що хочете видалити файл "${f.originalName}"?`)) {
+                                              try {
+                                                await API.delete(`/documents/${doc._id}/files/${f._id}`);
+                                                await fetchDetails();
+                                              } catch (e: any) {
+                                                alert(e.message || 'Не вдалося видалити файл');
+                                              }
+                                            }
+                                          }}
+                                          className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all"
+                                          title="Видалити файл"
+                                        >
+                                          <Trash2 size={18} />
+                                        </button>
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Historical versions */}
+                            {doc.fileVersions && doc.fileVersions.filter(fv => fv.fileId === f._id).length > 0 && (
+                              <div className="mt-1 pt-2 border-t border-slate-100 space-y-1.5 pl-2">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Історія версій:</p>
+                                <div className="space-y-1">
+                                  {doc.fileVersions.filter(fv => fv.fileId === f._id).map((fv) => (
+                                    <div key={fv._id} className="flex items-center justify-between text-xs text-slate-500 bg-white/50 px-3 py-1.5 rounded-lg border border-slate-100">
+                                      <span className="font-medium">Версія {fv.version} (від {fv.uploadedBy?.fullName || 'Система'})</span>
+                                      <div className="flex items-center gap-3">
+                                        <span className="text-[10px] font-mono">{(fv.size / 1024 / 1024).toFixed(2)} MB</span>
+                                        {canViewFiles && (
+                                          <a 
+                                            href={`http://localhost:5001/api/documents/${doc._id}/files/${fv.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
+                                            className="text-blue-500 hover:text-blue-700 hover:underline flex items-center gap-1 font-semibold text-[11px]"
+                                          >
+                                            <Download size={12} />
+                                            Скачати v{fv.version}
+                                          </a>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                         </div>
                       ))
                     )}
                   </div>
-               </div>
+                </div>
+
+                {/* Пов'язані документи */}
+                <div className="pt-8 border-t border-slate-100">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Пов'язані документи</h3>
+                      {['draft', 'rejected'].includes(doc.status) && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin') && (
+                        <button 
+                          onClick={() => {
+                            setIsLinkModalOpen(true);
+                            fetchAvailableDocuments();
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl text-xs font-bold transition-all border border-blue-100"
+                        >
+                          <Plus size={14} />
+                          Додати зв'язок
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {(!doc.relatedDocuments || doc.relatedDocuments.length === 0) ? (
+                        <p className="text-sm text-slate-400 italic col-span-2">Пов'язаних документів не знайдено</p>
+                      ) : (
+                        doc.relatedDocuments.map((rd) => (
+                          <div key={rd._id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between group">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <FileText className="text-slate-400 shrink-0" size={16} />
+                                <div className="min-w-0">
+                                <p 
+                                    onClick={() => navigate(`/document/${rd._id}`)}
+                                    className="text-sm font-bold text-slate-800 hover:text-blue-600 cursor-pointer transition-colors truncate"
+                                >
+                                    {rd.regNumber} — {rd.title}
+                                </p>
+                                <div className="mt-1">
+                                    <span className="text-[10px] bg-slate-200 px-2 py-0.5 rounded uppercase font-bold text-slate-600 tracking-wider">
+                                    {translateStatus(rd.status)}
+                                    </span>
+                                </div>
+                                </div>
+                            </div>
+                            
+                            {['draft', 'rejected'].includes(doc.status) && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin') && (
+                                <button 
+                                onClick={async () => {
+                                    if (confirm(`Ви впевнені, що хочете розірвати зв'язок з документом "${rd.regNumber}"?`)) {
+                                    try {
+                                        setActionLoading('unlink');
+                                        await API.delete(`/documents/${doc._id}/related/${rd._id}`);
+                                        await fetchDetails();
+                                    } catch (err: any) {
+                                        alert(err.message || 'Не вдалося розірвати зв\'язок');
+                                    } finally {
+                                        setActionLoading(null);
+                                    }
+                                    }
+                                }}
+                                className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all shrink-0"
+                                title="Розірвати зв'язок"
+                                >
+                                <Trash2 size={16} />
+                                </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Sidebar Info */}
         <div className="space-y-8">
@@ -754,25 +784,30 @@ const DocumentDetails: React.FC = () => {
                 </button>
               </form>
 
-              <div className="space-y-6 flex-1 overflow-y-auto max-h-[400px] pr-2">
-                 {audit.length === 0 ? (
-                   <p className="text-sm text-slate-400 italic">Історія відсутня</p>
-                 ) : (
-                   audit.map((log) => (
-                     <div key={log._id} className="flex gap-3 relative pb-6 last:pb-0">
+              {activeTab === 'audit' && (
+                <div className="space-y-6 flex-1 overflow-y-auto max-h-[400px] pr-2">
+                  {audit.length === 0 ? (
+                    <p className="text-sm text-slate-400 italic">Історія відсутня</p>
+                  ) : (
+                    audit.map((log) => (
+                      <div key={log._id} className="flex gap-3 relative pb-6 last:pb-0">
                         <div className="absolute left-4 top-8 bottom-0 w-0.5 bg-slate-100 last:hidden" />
                         <div className="relative z-10 w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs shrink-0">
-                           {log.user ? log.user.fullName.charAt(0) : '?'}
+                          {log.user ? log.user.fullName.charAt(0) : '?'}
                         </div>
                         <div className="min-w-0">
-                           <p className="text-sm font-bold text-slate-900 leading-tight truncate">
-                              {log.user?.fullName || 'Система'}
-                           </p>
-                           <p className="text-xs text-slate-600 mt-1">
-                              {translateAuditAction(log.action)}
-                           </p>
-                            {log.comment && <p className="text-xs text-slate-500 mt-1.5 bg-slate-50 border border-slate-100 rounded-lg p-2 italic leading-relaxed">{log.comment}</p>}
-                           <p className="text-[10px] text-slate-400 mt-1">{new Date(log.createdAt).toLocaleString('uk-UA')}</p>
+  <p className="text-xs text-slate-600 mt-1">
+    {translateAuditAction(log.action)}
+  </p>
+  {log.comment && (
+    <p className="text-xs text-slate-500 mt-1.5 bg-slate-50 border border-slate-100 rounded-lg p-2 italic leading-relaxed">
+      {log.comment}
+    </p>
+  )}
+  <p className="text-[10px] text-slate-400 mt-1">
+    {new Date(log.createdAt).toLocaleString('uk-UA')}
+  </p>
+</div>
                         </div>
                      </div>
                    ))

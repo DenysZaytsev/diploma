@@ -376,6 +376,8 @@ const getDocumentById = async (req, res) => {
 
     if (req.user.role === 'employee') {
         const isCreator = creatorId === req.user._id.toString();
+        // Employee can view their own documents, **and** signed/archived documents that are marked
+        // as public or internal (i.e., not secret). Delegated access is also respected.
         const isPublic = ['signed', 'archived'].includes(document.status) && ['public', 'internal'].includes(document.confidentiality);
         const hasDelegatedEdit = await checkDraftEditAccess(document, req.user);
         if (!isCreator && !isPublic && !hasDelegatedEdit) {
