@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import Modal from '../Modal';
 import { Loader2, Shield } from 'lucide-react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 export interface User {
   _id?: string;
@@ -8,6 +14,7 @@ export interface User {
   email: string;
   role: string;
   department?: string;
+  departments?: string[];
   password?: string;
   isSuperAdmin?: boolean;
   isBlocked?: boolean;
@@ -35,6 +42,7 @@ const UserModal: React.FC<UserModalProps> = ({
     email: '',
     role: 'employee',
     department: '',
+    departments: [],
     password: ''
   });
   const [loading, setLoading] = useState(false);
@@ -46,7 +54,8 @@ const UserModal: React.FC<UserModalProps> = ({
         fullName: user.fullName,
         email: user.email,
         role: user.role,
-        department: user.department || ''
+        department: user.department || '',
+        departments: user.departments || (user.department ? [user.department] : [])
       });
     } else {
       setFormData({
@@ -54,6 +63,7 @@ const UserModal: React.FC<UserModalProps> = ({
         email: '',
         role: 'employee',
         department: '',
+        departments: [],
         password: ''
       });
     }
@@ -165,17 +175,43 @@ const UserModal: React.FC<UserModalProps> = ({
               </select>
             )}
           </div>
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1">Відділ</label>
-            <select
-              value={formData.department}
-              disabled={isSelf && !amISuperAdmin}
-              onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-              className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/10 transition-all font-medium disabled:opacity-50"
-            >
-              <option value="">Не вказано</option>
-              {departments.map(d => <option key={d} value={d}>{d}</option>)}
-            </select>
+          
+          <div className="md:col-span-2">
+            <label className="block text-sm font-bold text-slate-700 mb-2">Відділи (можна обрати декілька)</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 p-4 rounded-xl border border-slate-200 max-h-40 overflow-y-auto">
+              {departments.map(d => {
+                const isChecked = formData.departments?.includes(d) || false;
+                return (
+                  <label 
+                    key={d} 
+                    className={cn(
+                      "flex items-center gap-2 p-2 rounded-lg border text-xs font-semibold cursor-pointer transition-all",
+                      isChecked 
+                        ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm" 
+                        : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      disabled={isSelf && !amISuperAdmin}
+                      onChange={(e) => {
+                        const nextDepts = e.target.checked
+                          ? [...(formData.departments || []), d]
+                          : (formData.departments || []).filter(item => item !== d);
+                        setFormData({ 
+                          ...formData, 
+                          departments: nextDepts,
+                          department: nextDepts[0] || '' 
+                        });
+                      }}
+                      className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                    />
+                    <span>{d}</span>
+                  </label>
+                );
+              })}
+            </div>
           </div>
         </div>
 

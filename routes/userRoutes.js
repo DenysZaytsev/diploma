@@ -154,10 +154,9 @@ router.get('/', protect, async (req, res) => {
             filter.department = req.query.department;
         }
 
-        // Завжди приховуємо чутливі дані типу хешу паролів
         const selectFields = req.user.role === 'admin' 
-            ? '_id fullName role department email isBlocked isSuperAdmin'
-            : '_id fullName role department email';
+            ? '_id fullName role department departments email isBlocked isSuperAdmin'
+            : '_id fullName role department departments email';
         const users = await User.find(filter).select(selectFields);
         res.json(users);
     } catch (error) {
@@ -169,7 +168,7 @@ router.get('/', protect, async (req, res) => {
 // Створити нового користувача (лише адмін)
 router.post('/', protect, authorize('admin'), async (req, res) => {
     try {
-        const { email, password, role, fullName, department } = req.body;
+        const { email, password, role, fullName, department, departments } = req.body;
         
         if (!email || !password || !role || !fullName) {
             return res.status(400).json({ message: 'Будь ласка, заповніть всі обовʼязкові поля' });
@@ -185,9 +184,12 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
         
-        const user = await User.create({ email, passwordHash, role, fullName, department });
+        const userDepts = departments || (department ? [department] : []);
+        const userDept = userDepts[0] || '';
         
-        await logAdminAction(req, 'Створення', email, `Створено користувача. Роль: ${role}, Відділ: ${department || 'Немає'}`);
+        const user = await User.create({ email, passwordHash, role, fullName, department: userDept, departments: userDepts });
+        
+        await logAdminAction(req, 'Створення', email, `Створено користувача. Роль: ${role}, Відділи: ${userDepts.join(', ') || 'Немає'}`);
         res.status(201).json({ _id: user._id, email: user.email, fullName: user.fullName });
     } catch (error) {
         console.error('Server error:', error);
@@ -231,6 +233,16 @@ router.patch('/:id', protect, authorize('admin'), async (req, res) => {
             delete updateData.role; // Якщо прийшла порожня строка, не оновлюємо
         }
 
+        if (updateData.departments !== undefined) {
+            const oldDepts = targetUser.departments || [];
+            const hasChanged = JSON.stringify(updateData.departments) !== JSON.stringify(oldDepts);
+            if (hasChanged) {
+                updateData.department = updateData.departments[0] || '';
+            }
+        } else if (updateData.department !== undefined && updateData.department !== targetUser.department) {
+            updateData.departments = updateData.department ? [updateData.department] : [];
+        }
+
         // Якщо адміністратор змінює пароль користувачу
         if (password) {
             const salt = await bcrypt.genSalt(10);
@@ -255,7 +267,13 @@ router.patch('/:id', protect, authorize('admin'), async (req, res) => {
         }
 
         if (updateData.role && updateData.role !== targetUser.role) changes.push(`Роль (${targetUser.role} -> ${updateData.role})`);
-        if (updateData.department !== undefined && updateData.department !== targetUser.department) changes.push('Відділ');
+        if (updateData.departments !== undefined) {
+            const oldDepts = targetUser.departments || [];
+            const hasChanged = JSON.stringify(updateData.departments) !== JSON.stringify(oldDepts);
+            if (hasChanged) changes.push('Відділи');
+        } else if (updateData.department !== undefined && updateData.department !== targetUser.department) {
+            changes.push('Відділ');
+        }
         if (updateData.isBlocked !== undefined && updateData.isBlocked !== targetUser.isBlocked) changes.push(updateData.isBlocked ? 'Заблоковано' : 'Розблоковано');
         if (password) changes.push('Змінено пароль');
 

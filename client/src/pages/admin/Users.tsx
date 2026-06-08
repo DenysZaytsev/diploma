@@ -166,7 +166,7 @@ const Users: React.FC = () => {
                 u.fullName,
                 u.email,
                 roleLabels[u.role] || u.role,
-                u.department || '',
+                u.departments && u.departments.length > 0 ? u.departments.join('; ') : (u.department || ''),
                 u.isBlocked ? 'Заблокований' : 'Активний'
               ]);
               const csvContent = "\uFEFF" + [headers.join(','), ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(','))].join('\n');
@@ -304,7 +304,11 @@ const Users: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <p className="text-sm text-slate-600 font-medium">{u.department || '—'}</p>
+                      <p className="text-sm text-slate-600 font-medium">
+                        {u.departments && u.departments.length > 0 
+                          ? u.departments.join(', ') 
+                          : (u.department || '—')}
+                      </p>
                     </td>
                     <td className="px-6 py-4">
                        <div className="flex items-center gap-1.5">

@@ -24,8 +24,7 @@ const NewDocument: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   const [types, setTypes] = useState<{name: string, code: string}[]>([]);
-  const [approvers, setApprovers] = useState<any[]>([]);
-  const [signatories, setSignatories] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
 
   const { user: currentUser } = useAuth();
 
@@ -38,10 +37,22 @@ const NewDocument: React.FC = () => {
     dueDate: '',
     approverId: '',
     signatoryId: '',
-    confidentiality: 'internal'
+    confidentiality: 'internal',
+    department: ''
   });
   
   const [file, setFile] = useState<File | null>(null);
+
+  const userDepts = currentUser?.departments && currentUser.departments.length > 0
+    ? currentUser.departments
+    : (currentUser?.department ? [currentUser.department] : []);
+
+  const approvers = allUsers.filter(u => 
+    u.role === 'approver' && (u.departments?.includes(formData.department) || u.department === formData.department)
+  );
+  const signatories = allUsers.filter(u => 
+    u.role === 'signatory' && (u.departments?.includes(formData.department) || u.department === formData.department)
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -51,21 +62,15 @@ const NewDocument: React.FC = () => {
           API.get<any[]>('/users')
         ]);
         setTypes(typeData);
+        setAllUsers(userData);
         
-        // Filter approvers and signatories to only match the creator's department (or be admins)
-        const userDept = currentUser?.department;
+        const initialDept = userDepts[0] || '';
         
-        const filteredApprovers = userData.filter(u => 
-          u.role === 'approver' && u.department === userDept
-        );
-        const filteredSignatories = userData.filter(u => 
-          u.role === 'signatory' && u.department === userDept
-        );
-
-        setApprovers(filteredApprovers);
-        setSignatories(filteredSignatories);
-        
-        if (typeData.length > 0) setFormData(prev => ({ ...prev, type: typeData[0].code }));
+        setFormData(prev => ({ 
+          ...prev, 
+          type: typeData[0]?.code || '',
+          department: initialDept
+        }));
       } catch (e) {
         console.error('Failed to fetch initial data', e);
       }
@@ -109,7 +114,7 @@ const NewDocument: React.FC = () => {
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">Назва документа *</label>
                   <input
@@ -141,6 +146,24 @@ const NewDocument: React.FC = () => {
                     ) : (
                       types.map(t => <option key={t.code} value={t.code}>{t.name}</option>)
                     )}
+                  </select>
+               </div>
+               <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Відділ реєстрації *</label>
+                  <select
+                    required
+                    value={formData.department}
+                    onChange={(e) => setFormData({ ...formData, department: e.target.value, approverId: '', signatoryId: '' })}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-medium appearance-none cursor-pointer"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E")`,
+                      backgroundPosition: 'right 1rem center',
+                      backgroundSize: '1.5em 1.5em',
+                      backgroundRepeat: 'no-repeat',
+                      paddingRight: '2.5rem'
+                    }}
+                  >
+                    {userDepts.map((d: string) => <option key={d} value={d}>{d}</option>)}
                   </select>
                </div>
             </div>

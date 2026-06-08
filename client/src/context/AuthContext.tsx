@@ -9,6 +9,7 @@ export interface User {
   fullName: string;
   role: UserRole;
   department?: string;
+  departments?: string[];
   avatar?: string;
   isSuperAdmin?: boolean;
   notifications?: {

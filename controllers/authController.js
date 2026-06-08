@@ -21,6 +21,7 @@ const loginUser = async (req, res) => {
         email: user.email,
         role: user.role,
         department: user.department,
+        departments: user.departments || [],
         token: generateToken(user._id, user.role),
       });
     } else {
@@ -63,6 +64,7 @@ const registerUser = async (req, res) => {
         email: user.email,
         role: user.role,
         department: user.department,
+        departments: user.departments || [],
         avatar: user.avatar,
         notifications: user.notifications,
         token: generateToken(user._id, user.role),
@@ -118,6 +120,7 @@ const updateProfile = async (req, res) => {
       email: user.email,
       role: user.role,
       department: user.department,
+      departments: user.departments || [],
       avatar: user.avatar,
       notifications: user.notifications
     });

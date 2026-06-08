@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema({
   department: {
     type: String,
   },
+  departments: {
+    type: [String],
+    default: []
+  },
   isBlocked: {
     type: Boolean,
     default: false,
