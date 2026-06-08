@@ -53,6 +53,22 @@ router.post('/', protect, authorize('approver', 'signatory', 'employee'), async 
             return res.status(400).json({ message: 'Працівники можуть делегувати обов\'язки лише колегам зі свого відділу' });
         }
 
+        // Перевірка на циклічне делегування: чи не делегував цей користувач вже повноваження поточному юзеру
+        const activeIncomingDelegation = await Delegation.findOne({
+            delegator: delegateId,
+            delegate: req.user._id,
+            isActive: true,
+            $or: [
+                { dateFrom: { $lte: toDate }, dateTo: { $gte: fromDate } }
+            ]
+        });
+
+        if (activeIncomingDelegation) {
+            return res.status(400).json({ 
+                message: `Неможливо делегувати права користувачу ${delegate.fullName}, оскільки він уже делегував вам свої повноваження на цей період.` 
+            });
+        }
+
         const delegation = await Delegation.create({
             delegator: req.user._id,
             delegate: delegateId,
