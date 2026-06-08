@@ -35,6 +35,8 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const serverUrl = window.location.port === '5173' ? 'http://localhost:5001' : '';
+
 interface AuditLog {
   _id: string;
   action: string;
@@ -559,7 +561,7 @@ const DocumentDetails: React.FC = () => {
                                       <Eye size={18} />
                                     </button>
                                     <a 
-                                      href={`http://localhost:5001/api/documents/${doc._id}/files/${f.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
+                                      href={`${serverUrl}/api/documents/${doc._id}/files/${f.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
                                       className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-xl transition-all"
                                       title="Скачати"
                                     >
@@ -624,7 +626,7 @@ const DocumentDetails: React.FC = () => {
                                         <span className="text-[10px] font-mono">{(fv.size / 1024 / 1024).toFixed(2)} MB</span>
                                         {canViewFiles && (
                                           <a 
-                                            href={`http://localhost:5001/api/documents/${doc._id}/files/${fv.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
+                                            href={`${serverUrl}/api/documents/${doc._id}/files/${fv.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
                                             className="text-blue-500 hover:text-blue-700 hover:underline flex items-center gap-1 font-semibold text-[11px]"
                                           >
                                             <Download size={12} />
@@ -844,11 +846,13 @@ const DocumentDetails: React.FC = () => {
             {/* Content */}
             <div className="flex-1 overflow-hidden relative">
               {(() => {
-                const url = `http://localhost:5001${selectedPreviewFile.path}`;
+                const url = `${serverUrl}${selectedPreviewFile.path}`;
                 const ext = selectedPreviewFile.path.split('.').pop()?.toLowerCase() || '';
                 const isPdf = ext === 'pdf' || selectedPreviewFile.mimeType.includes('pdf');
                 const isImage = ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext) || selectedPreviewFile.mimeType.includes('image');
-                const isOffice = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext);
+                const isDocx = ext === 'docx';
+                const isDoc = ext === 'doc';
+                const isOffice = ['xls', 'xlsx', 'ppt', 'pptx'].includes(ext);
                 const isTxt = ['txt', 'csv', 'md'].includes(ext) || selectedPreviewFile.mimeType.includes('text');
 
                 if (isPdf) {
@@ -869,6 +873,15 @@ const DocumentDetails: React.FC = () => {
                       />
                     </div>
                   );
+                } else if (isDocx || isDoc) {
+                  const previewUrl = `${serverUrl}/api/documents/${doc._id}/files/${selectedPreviewFile.path.split('/').pop()}/view?token=${localStorage.getItem('token')}`;
+                  return (
+                    <iframe 
+                      src={previewUrl}
+                      className="w-full h-full border-0 bg-white"
+                      title={selectedPreviewFile.originalName}
+                    />
+                  );
                 } else if (isOffice) {
                   const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
                   if (isLocal) {
@@ -887,7 +900,7 @@ const DocumentDetails: React.FC = () => {
                           </p>
                         </div>
                         <a 
-                          href={`http://localhost:5001/api/documents/${doc._id}/files/${selectedPreviewFile.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
+                          href={`${serverUrl}/api/documents/${doc._id}/files/${selectedPreviewFile.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
                           className="mt-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/20 transition-all flex items-center gap-2"
                         >
                           <Download size={16} />
@@ -922,7 +935,7 @@ const DocumentDetails: React.FC = () => {
                         <p className="text-sm text-slate-500 max-w-sm">Файли цього формату ({ext.toUpperCase()}) не підтримують онлайн-перегляд в браузері. Будь ласка, завантажте файл на свій пристрій.</p>
                       </div>
                        <a 
-                        href={`http://localhost:5001/api/documents/${doc._id}/files/${selectedPreviewFile.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
+                        href={`${serverUrl}/api/documents/${doc._id}/files/${selectedPreviewFile.path.split('/').pop()}/download?token=${localStorage.getItem('token')}`}
                         className="mt-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-600/20 transition-all flex items-center gap-2"
                       >
                         <Download size={16} />

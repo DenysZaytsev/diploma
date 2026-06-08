@@ -1089,8 +1089,131 @@ const downloadFile = async (req, res) => {
     }
 };
 
+const viewOfficeFile = async (req, res) => {
+    try {
+        const doc = await Document.findById(req.params.id)
+            .populate('creator', '_id department');
+            
+        if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
+        
+        // RDAC: Admins and SuperAdmins cannot download or view document content
+        if (req.user.role === 'admin') {
+            return res.status(403).json({ message: 'Адміністраторам заборонено скачувати або переглядати вміст документів згідно з політикою RDAC' });
+        }
+
+        if (req.user.role === 'employee') {
+            const isCreator = doc.creator._id.toString() === req.user._id.toString();
+            const isPublic = ['signed', 'archived'].includes(doc.status) && ['public', 'internal'].includes(doc.confidentiality);
+            if (!isCreator && !isPublic) {
+                return res.status(403).json({ message: 'Access denied' });
+            }
+        }
+        
+        if (req.user.role !== 'admin' && doc.status === 'draft') {
+            if (doc.creator._id.toString() !== req.user._id.toString()) {
+                 return res.status(403).json({ message: 'Access denied' });
+            }
+        }
+        
+        if (req.user.role !== 'admin' && doc.confidentiality === 'secret' && doc.department !== req.user.department) {
+             return res.status(403).json({ message: 'Access denied' });
+        }
+
+        const fs = require('fs');
+        const filename = req.params.filename;
+        const filePath = path.join(__dirname, '../uploads', filename);
+        
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ message: 'File not found' });
+        }
+
+        const ext = path.extname(filename).toLowerCase();
+        if (ext === '.docx') {
+            const mammoth = require('mammoth');
+            const result = await mammoth.convertToHtml({ path: filePath });
+            
+            const styledHtml = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <style>
+                        body {
+                            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                            line-height: 1.6;
+                            color: #1e293b;
+                            padding: 24px;
+                            max-width: 800px;
+                            margin: 0 auto;
+                            background: white;
+                        }
+                        p { margin-bottom: 1.25em; }
+                        h1, h2, h3, h4, h5, h6 { color: #0f172a; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 700; }
+                        table { border-collapse: collapse; width: 100%; margin-bottom: 1.5em; }
+                        table, th, td { border: 1px solid #cbd5e1; }
+                        th, td { padding: 8px 12px; text-align: left; }
+                        th { background-color: #f8fafc; }
+                    </style>
+                </head>
+                <body>
+                    <div class="office-preview-container">
+                        ${result.value}
+                    </div>
+                </body>
+                </html>
+            `;
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            return res.send(styledHtml);
+        } else if (ext === '.doc') {
+            const docExtractor = require('../utils/textExtractor');
+            const rawText = await docExtractor.extractTextFromFile(path.relative(path.join(__dirname, '..'), filePath));
+            if (rawText) {
+                const paragraphsHtml = rawText
+                    .split('\n')
+                    .map(p => p.trim() ? `<p>${p.trim()}</p>` : '')
+                    .join('');
+                
+                const styledHtml = `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="utf-8">
+                        <style>
+                            body {
+                                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                                line-height: 1.6;
+                                color: #1e293b;
+                                padding: 24px;
+                                max-width: 800px;
+                                margin: 0 auto;
+                                background: white;
+                            }
+                            p { margin-bottom: 1.25em; }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="office-preview-container">
+                            ${paragraphsHtml}
+                        </div>
+                    </body>
+                    </html>
+                `;
+                res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                return res.send(styledHtml);
+            }
+            return res.status(400).json({ message: 'Помилка видобування вмісту з файлу .doc' });
+        }
+
+        res.status(400).json({ message: 'Формат файлу не підтримується для онлайн перегляду' });
+    } catch (error) {
+        console.error('Office view error:', error);
+        res.status(500).json({ message: 'Помилка сервера при обробці документа' });
+    }
+};
+
 module.exports = {
   downloadFile,
+  viewOfficeFile,
   createDocument,
   getDocuments,
   getDocumentById,
