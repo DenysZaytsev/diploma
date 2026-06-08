@@ -39,6 +39,13 @@ const extractTextFromFile = async (filePath) => {
             return result.value || '';
         }
 
+        if (ext === '.doc') {
+            const WordExtractor = require('word-extractor');
+            const extractor = new WordExtractor();
+            const extracted = await extractor.extract(fullPath);
+            return extracted.getBody() || '';
+        }
+
         if (['.txt', '.csv', '.md'].includes(ext)) {
             return fs.readFileSync(fullPath, 'utf8');
         }
