@@ -202,7 +202,7 @@ const Delegations: React.FC = () => {
                       const val = e.target.value;
                       setDateFrom(val);
                       if (dateTo && val > dateTo) {
-                        setDateTo('');
+                        setDateTo(val);
                       }
                     }}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm bg-white text-slate-800"
@@ -219,7 +219,7 @@ const Delegations: React.FC = () => {
                       const val = e.target.value;
                       setDateTo(val);
                       if (dateFrom && val < dateFrom) {
-                        setDateFrom('');
+                        setDateFrom(val);
                       }
                     }}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm bg-white text-slate-800"
