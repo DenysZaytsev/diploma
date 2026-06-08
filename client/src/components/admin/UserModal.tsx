@@ -55,7 +55,7 @@ const UserModal: React.FC<UserModalProps> = ({
         email: user.email,
         role: user.role,
         department: user.department || '',
-        departments: user.departments || (user.department ? [user.department] : [])
+        departments: (user.departments && user.departments.length > 0) ? user.departments : (user.department ? [user.department] : [])
       });
     } else {
       setFormData({
