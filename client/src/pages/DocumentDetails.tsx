@@ -43,6 +43,8 @@ interface AuditLog {
   user: { fullName: string; role: string };
   createdAt: string;
   comment?: string;
+  fromStatus?: string;
+  toStatus?: string;
 }
 
 interface DocumentDetails {
@@ -838,8 +840,13 @@ const DocumentDetails: React.FC = () => {
                           {log.user ? log.user.fullName.charAt(0) : '?'}
                         </div>
                         <div className="min-w-0">
-                          <p className="text-xs text-slate-600 mt-1">
+                          <p className="text-xs text-slate-600 mt-1 font-semibold">
                             {translateAuditAction(log.action)}
+                            {activeTab === 'audit' && log.action === 'status_change' && log.fromStatus && log.toStatus && (
+                              <span className="text-slate-400 font-normal">
+                                {" "}(з «{translateStatus(log.fromStatus)}» на «{translateStatus(log.toStatus)}»)
+                              </span>
+                            )}
                           </p>
                           {log.comment && (
                             <p className="text-xs text-slate-500 mt-1.5 bg-slate-50 border border-slate-100 rounded-lg p-2 italic leading-relaxed">
