@@ -197,7 +197,14 @@ const Delegations: React.FC = () => {
                     required
                     value={dateFrom}
                     min={new Date().toISOString().split('T')[0]}
-                    onChange={(e) => setDateFrom(e.target.value)}
+                    max={dateTo || undefined}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDateFrom(val);
+                      if (dateTo && val > dateTo) {
+                        setDateTo('');
+                      }
+                    }}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm bg-white text-slate-800"
                   />
                 </div>
@@ -208,7 +215,13 @@ const Delegations: React.FC = () => {
                     required
                     value={dateTo}
                     min={dateFrom || new Date().toISOString().split('T')[0]}
-                    onChange={(e) => setDateTo(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setDateTo(val);
+                      if (dateFrom && val < dateFrom) {
+                        setDateFrom('');
+                      }
+                    }}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm bg-white text-slate-800"
                   />
                 </div>
