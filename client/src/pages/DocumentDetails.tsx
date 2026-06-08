@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import Modal from '../components/Modal';
 import { 
   ArrowLeft, 
   FileText, 
@@ -92,6 +93,9 @@ const DocumentDetails: React.FC = () => {
   const [commentText, setCommentText] = useState('');
 
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectError, setRejectError] = useState<string | null>(null);
   const [availableDocs, setAvailableDocs] = useState<any[]>([]);
   const [linkSearchQuery, setLinkSearchQuery] = useState('');
   const [linkFilterType, setLinkFilterType] = useState('');
@@ -193,24 +197,27 @@ const DocumentDetails: React.FC = () => {
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => navigate(-1)} 
-            className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          {/* Tab Navigation */}
-            <div className="flex border-b border-slate-200 mb-4">
+      <div className="space-y-4 border-b border-slate-200 pb-4">
+        {/* Top Navigation Row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <button 
+              onClick={() => navigate(-1)} 
+              className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-500"
+              title="Назад"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            {/* Tab Navigation */}
+            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setActiveTab('details')}
                 className={cn(
-                  "px-4 py-2 -mb-px border-b-2",
+                  "px-4 py-2 border-b-2 font-bold text-sm transition-all -mb-4",
                   activeTab === 'details'
                     ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-slate-600 hover:text-slate-800"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
                 )}
               >
                 Документ
@@ -219,78 +226,81 @@ const DocumentDetails: React.FC = () => {
                 type="button"
                 onClick={() => setActiveTab('audit')}
                 className={cn(
-                  "px-4 py-2 -mb-px border-b-2",
+                  "px-4 py-2 border-b-2 font-bold text-sm transition-all -mb-4",
                   activeTab === 'audit'
                     ? "border-blue-600 text-blue-600"
-                    : "border-transparent text-slate-600 hover:text-slate-800"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
                 )}
               >
                 Журнал аудиту
               </button>
             </div>
-          <div>
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-semibold text-slate-500 tracking-wider bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">{doc.regNumber}</span>
-              <span className={cn(
-                "px-3 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider border",
-                statusColors[doc.status]
-              )}>
-                {translateStatus(doc.status)}
-              </span>
-            </div>
-            {isEditing ? (
-              <input 
-                type="text" 
-                className="w-full text-2xl font-extrabold text-slate-900 mt-2 px-3 py-1.5 border border-blue-500 rounded-xl focus:ring-2 focus:ring-blue-500/20 outline-none" 
-                value={editTitle} 
-                onChange={(e) => setEditTitle(e.target.value)} 
-              />
-            ) : (
-              <h1 className="text-2xl font-extrabold text-slate-900 mt-2">{doc.title}</h1>
-            )}
           </div>
+          {['signed', 'archived'].includes(doc.status) && (
+            <button
+              onClick={() => {
+                const passport = {
+                  id: doc._id,
+                  regNumber: doc.regNumber,
+                  title: doc.title,
+                  description: doc.description,
+                  type: types.find(t => t.code === doc.type)?.name || doc.type,
+                  status: translateStatus(doc.status),
+                  confidentiality: translateConfidentiality(doc.confidentiality),
+                  direction: translateDirection(doc.direction),
+                  department: doc.department,
+                  counterparty: doc.counterparty,
+                  dueDate: doc.dueDate,
+                  createdAt: doc.createdAt,
+                  creator: doc.creator?.fullName,
+                  approver: doc.approver?.fullName,
+                  signatory: doc.signatory?.fullName,
+                  files: doc.files?.map(f => ({
+                    name: f.originalName,
+                    size: f.size,
+                    version: f.version || 1
+                  }))
+                };
+                const jsonContent = JSON.stringify(passport, null, 2);
+                const blob = new Blob([jsonContent], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', `passport_${doc.regNumber}.json`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-sm transition-all"
+            >
+              <Download size={16} />
+              Експорт паспорта (JSON)
+            </button>
+          )}
         </div>
-        {['signed', 'archived'].includes(doc.status) && (
-          <button
-            onClick={() => {
-              const passport = {
-                id: doc._id,
-                regNumber: doc.regNumber,
-                title: doc.title,
-                description: doc.description,
-                type: types.find(t => t.code === doc.type)?.name || doc.type,
-                status: translateStatus(doc.status),
-                confidentiality: translateConfidentiality(doc.confidentiality),
-                direction: translateDirection(doc.direction),
-                department: doc.department,
-                counterparty: doc.counterparty,
-                dueDate: doc.dueDate,
-                createdAt: doc.createdAt,
-                creator: doc.creator?.fullName,
-                approver: doc.approver?.fullName,
-                signatory: doc.signatory?.fullName,
-                files: doc.files?.map(f => ({
-                  name: f.originalName,
-                  size: f.size,
-                  version: f.version || 1
-                }))
-              };
-              const jsonContent = JSON.stringify(passport, null, 2);
-              const blob = new Blob([jsonContent], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement('a');
-              link.setAttribute('href', url);
-              link.setAttribute('download', `passport_${doc.regNumber}.json`);
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 shadow-sm transition-all"
-          >
-            <Download size={16} />
-            Експорт паспорта (JSON)
-          </button>
-        )}
+
+        {/* Title and Badge Row */}
+        <div className="pt-2">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-slate-500 tracking-wider bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">{doc.regNumber}</span>
+            <span className={cn(
+              "px-3 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider border",
+              statusColors[doc.status]
+            )}>
+              {translateStatus(doc.status)}
+            </span>
+          </div>
+          {isEditing ? (
+            <input 
+              type="text" 
+              className="w-full text-2xl font-extrabold text-slate-900 mt-2 px-3 py-1.5 border border-blue-500 rounded-xl focus:ring-2 focus:ring-blue-500/20 outline-none" 
+              value={editTitle} 
+              onChange={(e) => setEditTitle(e.target.value)} 
+            />
+          ) : (
+            <h1 className="text-2xl font-extrabold text-slate-900 mt-2">{doc.title}</h1>
+          )}
+        </div>
       </div>
 
       {/* Action Bar (only visible if actions are available) */}
@@ -393,14 +403,9 @@ const DocumentDetails: React.FC = () => {
                <>
                  <button 
                    onClick={() => {
-                     const reason = prompt('Вкажіть причину відхилення:');
-                     if (reason) {
-                       setActionLoading('rejected');
-                       API.post(`/documents/${id}/reject`, { comment: reason })
-                         .then(() => fetchDetails())
-                         .catch(err => alert(err.message))
-                         .finally(() => setActionLoading(null));
-                     }
+                     setRejectReason('');
+                     setRejectError(null);
+                     setIsRejectModalOpen(true);
                    }}
                    disabled={!!actionLoading}
                    className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm font-bold transition-all flex items-center gap-2"
@@ -430,14 +435,9 @@ const DocumentDetails: React.FC = () => {
                <>
                  <button 
                    onClick={() => {
-                     const reason = prompt('Вкажіть причину відхилення:');
-                     if (reason) {
-                       setActionLoading('rejected');
-                       API.post(`/documents/${id}/reject`, { comment: reason })
-                         .then(() => fetchDetails())
-                         .catch(err => alert(err.message))
-                         .finally(() => setActionLoading(null));
-                     }
+                     setRejectReason('');
+                     setRejectError(null);
+                     setIsRejectModalOpen(true);
                    }}
                    disabled={!!actionLoading}
                    className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl text-sm font-bold transition-all flex items-center gap-2"
@@ -715,9 +715,16 @@ const DocumentDetails: React.FC = () => {
         )}
 
         {/* Sidebar Info */}
-        <div className="space-y-8">
+        <div className={cn(
+          activeTab === 'details' 
+            ? "space-y-8" 
+            : "lg:col-span-3 grid grid-cols-1 lg:grid-cols-3 gap-8 items-start"
+        )}>
            {/* Workflow */}
-           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+           <div className={cn(
+             "bg-white p-6 rounded-2xl border border-slate-200 shadow-sm",
+             activeTab === 'audit' && "lg:col-span-1"
+           )}>
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                 <Shield size={16} />
                 Виконання
@@ -743,7 +750,10 @@ const DocumentDetails: React.FC = () => {
            </div>
 
            {/* Timeline */}
-           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
+           <div className={cn(
+              "bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col",
+              activeTab === 'audit' && "lg:col-span-2"
+           )}>
               <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
                 <History size={16} />
                 Історія подій
@@ -784,8 +794,7 @@ const DocumentDetails: React.FC = () => {
                 </button>
               </form>
 
-              {activeTab === 'audit' && (
-                <div className="space-y-6 flex-1 overflow-y-auto max-h-[400px] pr-2">
+              <div className={cn("space-y-6 flex-1 overflow-y-auto pr-2", activeTab === 'audit' ? "max-h-[600px]" : "max-h-[300px]")}>
                   {audit.length === 0 ? (
                     <p className="text-sm text-slate-400 italic">Історія відсутня</p>
                   ) : (
@@ -812,7 +821,6 @@ const DocumentDetails: React.FC = () => {
                    ))
                  )}
               </div>
-              )}
             </div>
         </div>
       </div>
@@ -1042,6 +1050,72 @@ const DocumentDetails: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Rejection Reason Modal */}
+      <Modal
+        isOpen={isRejectModalOpen}
+        onClose={() => setIsRejectModalOpen(false)}
+        title="Відхилити документ"
+        size="md"
+        footer={
+          <>
+            <button
+              onClick={() => setIsRejectModalOpen(false)}
+              className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl text-sm font-bold transition-all"
+            >
+              Скасувати
+            </button>
+            <button
+              onClick={async () => {
+                if (!rejectReason.trim()) {
+                  setRejectError('Вкажіть причину відхилення');
+                  return;
+                }
+                if (rejectReason.trim().length < 3) {
+                  setRejectError('Причина відхилення занадто коротка (мінімум 3 символи)');
+                  return;
+                }
+                try {
+                  setActionLoading('rejected');
+                  setIsRejectModalOpen(false);
+                  await API.post(`/documents/${id}/reject`, { comment: rejectReason.trim() });
+                  await fetchDetails();
+                } catch (err: any) {
+                  alert(err.message || 'Помилка при відхиленні документа');
+                } finally {
+                  setActionLoading(null);
+                }
+              }}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-600/20 transition-all"
+            >
+              Відхилити
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <label className="block text-sm font-semibold text-slate-700">
+            Причина відхилення <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={rejectReason}
+            onChange={(e) => {
+              setRejectReason(e.target.value);
+              if (e.target.value.trim()) setRejectError(null);
+            }}
+            placeholder="Вкажіть, будь ласка, причину, чому документ відхилено..."
+            className={cn(
+              "w-full h-32 px-4 py-3 border rounded-xl focus:ring-2 outline-none resize-none text-slate-800 text-sm transition-all",
+              rejectError 
+                ? "border-red-300 focus:ring-red-500/20 focus:border-red-500" 
+                : "border-slate-200 focus:ring-blue-500/20 focus:border-blue-500"
+            )}
+          />
+          {rejectError && (
+            <p className="text-xs text-red-500 font-semibold">{rejectError}</p>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };
