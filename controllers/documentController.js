@@ -484,9 +484,27 @@ const addComment = async (req, res) => {
 
     await createAuditLog(doc._id, req.user._id, 'comment', { comment });
 
-    // Notify creator about comment (if not self)
-    if (doc.creator.toString() !== req.user._id.toString()) {
-        await createNotification(doc.creator, 'comment', 'Новий коментар', `${req.user.fullName} додав коментар до документа ${doc.regNumber}`, doc._id);
+    // Збираємо список усіх учасників документа для сповіщення
+    const participants = [
+        { id: doc.creator, label: 'creator' },
+        doc.approver ? { id: doc.approver, label: 'approver' } : null,
+        doc.signatory ? { id: doc.signatory, label: 'signatory' } : null
+    ].filter(Boolean);
+
+    for (const p of participants) {
+        // Не сповіщаємо самого себе (того, хто залишив коментар)
+        if (p.id.toString() === req.user._id.toString()) continue;
+
+        const pUser = await User.findById(p.id).select('notifications email');
+        if (pUser && pUser.notifications?.onComment !== false) {
+            await createNotification(
+                pUser._id, 
+                'comment', 
+                'Новий коментар', 
+                `${req.user.fullName} додав коментар до документа ${doc.regNumber}`, 
+                doc._id
+            );
+        }
     }
 
     res.json({ message: 'Коментар додано' });

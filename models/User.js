@@ -48,7 +48,8 @@ const userSchema = new mongoose.Schema({
     onStatusChange: { type: Boolean, default: true }, // Зміна статусу власного чи погодженого документа
     onNewTask: { type: Boolean, default: true },      // Нове завдання (передано на погодження / на підпис)
     onAdminAlerts: { type: Boolean, default: true },  // Системні сповіщення (для адміна)
-    onUserEvents: { type: Boolean, default: true }    // Дії з користувачами (для адміна)
+    onUserEvents: { type: Boolean, default: true },   // Дії з користувачами (для адміна)
+    onComment: { type: Boolean, default: true }       // Сповіщення про коментарі
   }
 }, { timestamps: true });
 

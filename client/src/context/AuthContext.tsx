@@ -16,6 +16,7 @@ export interface User {
     onNewTask?: boolean;
     onStatusChange?: boolean;
     onOverdue?: boolean;
+    onComment?: boolean;
   };
 }
 
