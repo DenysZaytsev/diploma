@@ -11,6 +11,8 @@ const Profile: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   
+  const [fullName, setFullName] = useState(user?.fullName || '');
+
   const [notifications, setNotifications] = useState({
     onNewTask: user?.notifications?.onNewTask !== false,
     onStatusChange: user?.notifications?.onStatusChange !== false,
@@ -53,12 +55,19 @@ const Profile: React.FC = () => {
     setErrorMsg('');
     setSuccessMsg('');
 
+    if (!fullName.trim()) {
+      setErrorMsg("Ім'я не може бути порожнім");
+      setSavingSettings(false);
+      return;
+    }
+
     try {
       const updatedUser = await API.patch<any>('/auth/profile', {
+        fullName: fullName.trim(),
         notifications: JSON.stringify(notifications)
       });
       updateUser(updatedUser);
-      setSuccessMsg('Налаштування сповіщень збережено!');
+      setSuccessMsg('Профіль успішно оновлено!');
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || 'Помилка збереження налаштувань');
@@ -149,6 +158,19 @@ const Profile: React.FC = () => {
           </div>
 
           <form onSubmit={handleSaveSettings} className="space-y-6">
+            {/* Особисті дані */}
+            <div className="space-y-2 border-b border-slate-100 pb-6">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">ПІБ (Повне ім'я) *</label>
+              <input 
+                type="text" 
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full max-w-lg px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all text-slate-800 font-medium"
+                placeholder="Введіть ваше повне ім'я..."
+              />
+            </div>
+
             <div className="space-y-4">
               {[
                 { 

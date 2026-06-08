@@ -109,6 +109,10 @@ const updateProfile = async (req, res) => {
       }
     }
 
+    if (req.body.fullName) {
+      user.fullName = req.body.fullName;
+    }
+
     if (req.file) {
       user.avatar = `/uploads/${req.file.filename}`;
     }
