@@ -310,7 +310,8 @@ const DocumentDetails: React.FC = () => {
         (doc.status === 'draft' && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin')) ||
         (doc.status === 'rejected' && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin')) ||
         (doc.status === 'on_approval' && (currentUser?.role === 'approver' || currentUser?.role === 'admin')) ||
-        (doc.status === 'on_signing' && (currentUser?.role === 'signatory' || currentUser?.role === 'admin'))
+        (doc.status === 'on_signing' && (currentUser?.role === 'signatory' || currentUser?.role === 'admin')) ||
+        (doc.status === 'signed' && currentUser?.role === 'approver')
       ) && (
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -462,6 +463,22 @@ const DocumentDetails: React.FC = () => {
                    Підписати
                  </button>
                </>
+             )}
+             {!isEditing && doc.status === 'signed' && currentUser?.role === 'approver' && (
+               <button 
+                 onClick={() => {
+                   setActionLoading('archive');
+                   API.post(`/documents/${id}/archive`, {})
+                     .then(() => fetchDetails())
+                     .catch(err => alert(err.message))
+                     .finally(() => setActionLoading(null));
+                 }}
+                 disabled={!!actionLoading}
+                 className="px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl text-sm font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2"
+               >
+                 {actionLoading === 'archive' ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />}
+                 Архівувати
+               </button>
              )}
           </div>
         </div>
