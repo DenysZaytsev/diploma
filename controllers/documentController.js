@@ -468,7 +468,10 @@ const addComment = async (req, res) => {
     const doc = await Document.findById(req.params.id);
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
 
-    if (req.user.role === 'employee' && doc.creator.toString() !== req.user._id.toString()) return res.status(403).json({ message: 'Access denied' });
+    if (req.user.role === 'employee') {
+        const hasAccess = await checkDraftEditAccess(doc, req.user);
+        if (!hasAccess) return res.status(403).json({ message: 'Access denied' });
+    }
     if (['approver', 'signatory'].includes(req.user.role) && req.user.department !== doc.department) {
         const delegation = await Delegation.findOne({
             delegate: req.user._id, department: doc.department, role: req.user.role,
