@@ -248,8 +248,16 @@ const getDocuments = async (req, res) => {
       const matchingUsers = await User.find({ fullName: { $regex: safeSearch, $options: 'i' } }).select('_id');
       const userIds = matchingUsers.map(u => u._id);
 
+      // Знаходимо всі AuditLog з коментарями, які відповідають пошуковому запиту
+      const matchingAuditLogs = await AuditLog.find({
+        action: 'comment',
+        comment: { $regex: safeSearch, $options: 'i' }
+      }).select('document');
+      const docIdsFromComments = matchingAuditLogs.map(log => log.document);
+
       const searchConditions = {
         $or: [
+          { _id: { $in: docIdsFromComments } },
           { regNumber: { $regex: safeSearch, $options: 'i' } },
           { title: { $regex: safeSearch, $options: 'i' } },
           { counterparty: { $regex: safeSearch, $options: 'i' } },
