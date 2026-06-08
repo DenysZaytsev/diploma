@@ -800,7 +800,7 @@ const DocumentDetails: React.FC = () => {
                   {audit.length === 0 ? (
                     <p className="text-sm text-slate-400 italic">Історія відсутня</p>
                   ) : (
-                    audit.map((log) => (
+                    (activeTab === 'details' ? audit.slice(0, 3) : audit).map((log) => (
                       <div key={log._id} className="flex gap-3 relative pb-6 last:pb-0">
                         <div className="absolute left-4 top-8 bottom-0 w-0.5 bg-slate-100 last:hidden" />
                         <div className="relative z-10 w-8 h-8 rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs shrink-0">
