@@ -58,9 +58,9 @@ interface DocumentDetails {
   dueDate?: string;
   createdAt: string;
   filePath: string;
-  creator: { _id: string; fullName: string; role: string };
-  approver?: { _id: string; fullName: string; role: string };
-  signatory?: { _id: string; fullName: string; role: string };
+  creator: { _id: string; fullName: string; role: string; department?: string };
+  approver?: { _id: string; fullName: string; role: string; department?: string };
+  signatory?: { _id: string; fullName: string; role: string; department?: string };
   versions: any[];
   confidentiality: string;
   files?: Array<{ _id: string; originalName: string; mimeType: string; size: number; path: string; version?: number }>;
@@ -750,7 +750,7 @@ const DocumentDetails: React.FC = () => {
               </h3>
               <div className="space-y-6">
                  {[
-                   { label: 'Створив', user: doc.creator },
+                   { label: 'Створив', user: doc.creator, date: doc.createdAt },
                    { label: 'Погоджує', user: doc.approver },
                    { label: 'Підписує', user: doc.signatory }
                  ].map((item, i) => (
@@ -761,7 +761,21 @@ const DocumentDetails: React.FC = () => {
                       <div>
                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">{item.label}</p>
                          <p className="text-sm font-bold text-slate-900">{item.user?.fullName || 'Не призначено'}</p>
-                         {item.user && <p className="text-[10px] text-slate-500 uppercase">{translateRole(item.user.role)}</p>}
+                         {item.user && (
+                           <div className="mt-1 space-y-0.5">
+                             <p className="text-[10px] text-slate-500 uppercase font-medium">{translateRole(item.user.role)}</p>
+                             {activeTab === 'audit' && (
+                               <>
+                                 <p className="text-[10px] text-slate-400 font-semibold">{item.user.department || 'Без відділу'}</p>
+                                 {item.date && (
+                                   <p className="text-[9px] text-slate-400 font-normal">
+                                     {new Date(item.date).toLocaleString('uk-UA')}
+                                   </p>
+                                 )}
+                               </>
+                             )}
+                           </div>
+                         )}
                       </div>
                    </div>
                  ))}
