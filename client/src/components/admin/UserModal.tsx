@@ -72,6 +72,10 @@ const UserModal: React.FC<UserModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.departments || formData.departments.length === 0) {
+      setError('Оберіть хоча б один відділ для користувача');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {

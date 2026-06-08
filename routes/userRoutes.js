@@ -185,6 +185,9 @@ router.post('/', protect, authorize('admin'), async (req, res) => {
         const passwordHash = await bcrypt.hash(password, salt);
         
         const userDepts = departments || (department ? [department] : []);
+        if (userDepts.length === 0) {
+            return res.status(400).json({ message: 'Користувачу має бути призначений хоча б один відділ' });
+        }
         const userDept = userDepts[0] || '';
         
         const user = await User.create({ email, passwordHash, role, fullName, department: userDept, departments: userDepts });
@@ -234,13 +237,19 @@ router.patch('/:id', protect, authorize('admin'), async (req, res) => {
         }
 
         if (updateData.departments !== undefined) {
+            if (!Array.isArray(updateData.departments) || updateData.departments.length === 0) {
+                return res.status(400).json({ message: 'Користувачу має бути призначений хоча б один відділ' });
+            }
             const oldDepts = targetUser.departments || [];
             const hasChanged = JSON.stringify(updateData.departments) !== JSON.stringify(oldDepts);
             if (hasChanged) {
                 updateData.department = updateData.departments[0] || '';
             }
         } else if (updateData.department !== undefined && updateData.department !== targetUser.department) {
-            updateData.departments = updateData.department ? [updateData.department] : [];
+            if (!updateData.department) {
+                return res.status(400).json({ message: 'Користувачу має бути призначений хоча б один відділ' });
+            }
+            updateData.departments = [updateData.department];
         }
 
         // Якщо адміністратор змінює пароль користувачу
