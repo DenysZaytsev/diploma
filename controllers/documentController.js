@@ -207,7 +207,7 @@ const getDocuments = async (req, res) => {
   try {
     const filter = { isDeleted: false };
 
-    const { type, status, search, direction, department, deadlineBefore, createdFrom, createdTo, tags, confidentiality, overdue, myDocs, inProgress } = req.query;
+    const { type, status, search, direction, department, deadlineBefore, createdFrom, createdTo, tags, confidentiality, overdue, myDocs, ownDocs, delegatedDocs, inProgress } = req.query;
 
     // Синхронізація статистики: якщо myDocs=true, показуємо лише документи поточного юзера або делеговані йому
     // Винесемо логіку в ролеві фільтри нижче для точної відповідності
@@ -288,11 +288,21 @@ const getDocuments = async (req, res) => {
         dateTo: { $gte: now }
       });
       const delegatorIds = activeDelegations.map(d => d.delegator);
-      const ownAndDelegatedCreators = [req.user._id, ...delegatorIds];
 
-      if (myDocs === 'true') {
-        // Dashboard drill-down: show documents created by this user or delegated to them
-        filter.creator = { $in: ownAndDelegatedCreators };
+      let targetCreators = [];
+      if (ownDocs === 'true' && delegatedDocs === 'true') {
+        targetCreators = [req.user._id, ...delegatorIds];
+      } else if (ownDocs === 'true') {
+        targetCreators = [req.user._id];
+      } else if (delegatedDocs === 'true') {
+        targetCreators = delegatorIds;
+      } else {
+        targetCreators = [req.user._id, ...delegatorIds]; // default fallback
+      }
+
+      if (myDocs === 'true' || ownDocs === 'true' || delegatedDocs === 'true') {
+        // Dashboard drill-down / explicit ownership filtering
+        filter.creator = { $in: targetCreators };
         if (status) {
             filter.status = status;
         }
@@ -300,7 +310,7 @@ const getDocuments = async (req, res) => {
         // Normal registry: show own/delegated docs + signed/archived public docs from others
         const accessConditions = {
           $or: [
-              { creator: { $in: ownAndDelegatedCreators } },
+              { creator: { $in: [req.user._id, ...delegatorIds] } },
               { department: req.user.department, status: { $in: ['signed', 'archived'] }, confidentiality: { $in: ['public', 'internal'] } }
           ]
         };
@@ -311,7 +321,7 @@ const getDocuments = async (req, res) => {
         }
       }
     } else {
-      if (myDocs === 'true') {
+      if (myDocs === 'true' || ownDocs === 'true' || delegatedDocs === 'true') {
         // Dashboard drill-down for non-employee roles
         if (req.user.role === 'signatory') {
           filter.status = status || 'on_signing';
