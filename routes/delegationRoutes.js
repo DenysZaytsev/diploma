@@ -85,12 +85,15 @@ router.post('/', protect, authorize('approver', 'signatory', 'employee'), async 
         if (req.user.role === 'signatory') roleName = 'підписанта';
         if (req.user.role === 'employee') roleName = 'працівника відділу';
 
-        await Notification.create({
-            recipient: delegateId,
-            type: 'delegation',
-            title: 'Нове делегування',
-            message: `${req.user.fullName} делегував вам повноваження ${roleName} з ${new Date(dateFrom).toLocaleDateString('uk-UA')} по ${new Date(dateTo).toLocaleDateString('uk-UA')}`
-        });
+        // Сповіщення делегату якщо налаштування активовано
+        if (delegate.notifications?.onDelegation !== false) {
+            await Notification.create({
+                recipient: delegateId,
+                type: 'delegation',
+                title: 'Нове делегування',
+                message: `${req.user.fullName} делегував вам повноваження ${roleName} з ${new Date(dateFrom).toLocaleDateString('uk-UA')} по ${new Date(dateTo).toLocaleDateString('uk-UA')}`
+            });
+        }
 
         const populated = await Delegation.findById(delegation._id)
             .populate('delegator', 'fullName email department')

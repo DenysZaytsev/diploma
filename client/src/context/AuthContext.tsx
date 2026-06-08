@@ -17,6 +17,7 @@ export interface User {
     onStatusChange?: boolean;
     onOverdue?: boolean;
     onComment?: boolean;
+    onDelegation?: boolean;
   };
 }
 

@@ -16,6 +16,7 @@ const Profile: React.FC = () => {
     onStatusChange: user?.notifications?.onStatusChange !== false,
     onOverdue: user?.notifications?.onOverdue !== false,
     onComment: user?.notifications?.onComment !== false,
+    onDelegation: user?.notifications?.onDelegation !== false,
   });
 
   if (!user) return null;
@@ -173,6 +174,12 @@ const Profile: React.FC = () => {
                   title: 'Нові коментарі до документів',
                   desc: 'Отримувати сповіщення, коли інші користувачі залишають коментарі у доступних вам документах.',
                   checked: notifications.onComment
+                },
+                {
+                  id: 'onDelegation',
+                  title: 'Нові мандати делегування',
+                  desc: 'Отримувати сповіщення, коли інші користувачі делегують вам повноваження.',
+                  checked: notifications.onDelegation
                 }
               ].map((item) => (
                 <div key={item.id} className="flex items-start gap-4 p-4 bg-slate-50 border border-slate-100 rounded-xl hover:bg-slate-100/50 transition-colors">

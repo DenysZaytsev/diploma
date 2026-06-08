@@ -49,7 +49,8 @@ const userSchema = new mongoose.Schema({
     onNewTask: { type: Boolean, default: true },      // Нове завдання (передано на погодження / на підпис)
     onAdminAlerts: { type: Boolean, default: true },  // Системні сповіщення (для адміна)
     onUserEvents: { type: Boolean, default: true },   // Дії з користувачами (для адміна)
-    onComment: { type: Boolean, default: true }       // Сповіщення про коментарі
+    onComment: { type: Boolean, default: true },       // Сповіщення про коментарі
+    onDelegation: { type: Boolean, default: true }    // Сповіщення про делегування
   }
 }, { timestamps: true });
 
