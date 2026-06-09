@@ -205,9 +205,9 @@ const createDocument = async (req, res) => {
 
 const getDocuments = async (req, res) => {
   try {
-    const filter = { isDeleted: false };
+    const { type, status, search, direction, department, deadlineBefore, createdFrom, createdTo, tags, confidentiality, overdue, myDocs, ownDocs, delegatedDocs, inProgress, isDeleted } = req.query;
 
-    const { type, status, search, direction, department, deadlineBefore, createdFrom, createdTo, tags, confidentiality, overdue, myDocs, ownDocs, delegatedDocs, inProgress } = req.query;
+    const filter = { isDeleted: isDeleted === 'true' };
 
     // Синхронізація статистики: якщо myDocs=true, показуємо лише документи поточного юзера або делеговані йому
     // Винесемо логіку в ролеві фільтри нижче для точної відповідності
@@ -386,7 +386,7 @@ const getDocumentById = async (req, res) => {
       .populate('files.uploadedBy', 'fullName')
       .populate('fileVersions.uploadedBy', 'fullName');
 
-    if (!document || document.isDeleted) {
+    if (!document) {
       return res.status(404).json({ message: 'Document not found' });
     }
 
@@ -431,6 +431,18 @@ const updateDocument = async (req, res) => {
 
     if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
     
+    // Оптимістичне блокування (Optimistic Locking)
+    if (req.body.updatedAt && doc.updatedAt) {
+        const clientDate = new Date(req.body.updatedAt);
+        const serverDate = new Date(doc.updatedAt);
+        // Допускаємо похибку в 1 секунду для уникнення проблем з парсингом
+        if (clientDate.getTime() + 1000 < serverDate.getTime()) {
+            return res.status(409).json({ 
+                message: 'Конфлікт редагування: Документ було змінено іншим користувачем. Оновіть сторінку, щоб побачити актуальну версію.' 
+            });
+        }
+    }
+
     const hasAccess = await checkDraftEditAccess(doc, req.user);
     if (!hasAccess) return res.status(403).json({ message: 'Denied' });
     
@@ -493,17 +505,31 @@ const addComment = async (req, res) => {
     await createAuditLog(doc._id, req.user._id, 'comment', { comment });
 
     // Збираємо список усіх учасників документа для сповіщення
-    const participants = [
-        { id: doc.creator, label: 'creator' },
-        doc.approver ? { id: doc.approver, label: 'approver' } : null,
-        doc.signatory ? { id: doc.signatory, label: 'signatory' } : null
-    ].filter(Boolean);
+    const participants = new Set();
+    participants.add(doc.creator.toString());
 
-    for (const p of participants) {
-        // Не сповіщаємо самого себе (того, хто залишив коментар)
-        if (p.id.toString() === req.user._id.toString()) continue;
+    if (doc.approver) {
+        participants.add(doc.approver.toString());
+    } else if (['on_approval', 'on_signing', 'signed', 'rejected', 'archived'].includes(doc.status)) {
+        const approvers = await User.find({ role: 'approver', department: doc.department }).select('_id');
+        approvers.forEach(a => participants.add(a._id.toString()));
+        const activeApprDelegate = await findActiveDelegate(doc.department, 'approver');
+        if (activeApprDelegate) participants.add(activeApprDelegate._id.toString());
+    }
 
-        const pUser = await User.findById(p.id).select('notifications email');
+    if (doc.signatory) {
+        participants.add(doc.signatory.toString());
+    } else if (['on_signing', 'signed', 'archived'].includes(doc.status)) {
+        const signatories = await User.find({ role: 'signatory', department: doc.department }).select('_id');
+        signatories.forEach(s => participants.add(s._id.toString()));
+        const activeSignDelegate = await findActiveDelegate(doc.department, 'signatory');
+        if (activeSignDelegate) participants.add(activeSignDelegate._id.toString());
+    }
+
+    participants.delete(req.user._id.toString());
+
+    for (const pId of participants) {
+        const pUser = await User.findById(pId).select('notifications email');
         if (pUser && pUser.notifications?.onComment !== false) {
             await createNotification(
                 pUser._id, 
@@ -988,6 +1014,147 @@ const bulkAction = async (req, res) => {
                         results.success++;
                         break;
 
+                    case 'approve':
+                        if (req.user.role !== 'approver') {
+                            results.failed++;
+                            results.errors.push({ id: docId, error: 'Тільки керівники можуть погоджувати документи' });
+                            continue;
+                        }
+                        if (doc.status !== 'on_approval') {
+                            results.failed++;
+                            results.errors.push({ id: docId, error: 'Документ має бути на погодженні' });
+                            continue;
+                        }
+
+                        let isApproveDelegated = false;
+                        let approveDelegatorName = '';
+                        if (doc.department !== req.user.department) {
+                            const delegation = await Delegation.findOne({
+                                delegate: req.user._id, department: doc.department, role: 'approver',
+                                isActive: true, dateFrom: { $lte: new Date() }, dateTo: { $gte: new Date() }
+                            }).populate('delegator', 'fullName');
+                            if (!delegation) {
+                                results.failed++;
+                                results.errors.push({ id: docId, error: 'Ви можете погоджувати документи лише свого відділу' });
+                                continue;
+                            }
+                            isApproveDelegated = true;
+                            approveDelegatorName = delegation.delegator ? delegation.delegator.fullName : 'керівника';
+                        }
+
+                        doc.status = 'on_signing';
+                        doc.approver = req.user._id;
+                        await doc.save();
+
+                        await logSystemAction(req.user, 'Призначення документа', 'Підписант', `Документ ${doc.regNumber} (${doc.title}) погоджено та передано на підписання масово з реєстру`);
+
+                        let approveAuditComment = 'Погоджено масово з реєстру.';
+                        if (isApproveDelegated) {
+                            approveAuditComment += ` (за делегуванням від ${approveDelegatorName})`;
+                        }
+                        await createAuditLog(doc._id, req.user._id, 'status_change', { 
+                            fromStatus: 'on_approval', 
+                            toStatus: 'on_signing', 
+                            comment: approveAuditComment 
+                        });
+
+                        // Notifications / emails
+                        try {
+                            const docUrl = `${req.protocol}://${req.get('host')}/pages/document.html?id=${doc._id}`;
+                            const signatories = await User.find({ role: 'signatory', department: doc.department }).select('email notifications fullName _id');
+                            const activeDelegate = await findActiveDelegate(doc.department, 'signatory');
+                            const recipients = [...signatories];
+                            if (activeDelegate && !signatories.find(s => s._id.toString() === activeDelegate._id.toString())) {
+                                recipients.push(activeDelegate);
+                            }
+
+                            const emails = recipients.filter(s => s.notifications?.onNewTask !== false).map(s => s.email);
+                            if (emails.length > 0) {
+                                await sendSystemEmail(emails, 'Документ очікує на підпис', `Документ <b>${doc.title}</b> (${doc.regNumber}) було погоджено керівником і тепер очікує на ваш електронний підпис.<br><br><a href="${docUrl}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Переглянути документ</a>`);
+                            }
+
+                            for (const r of recipients) {
+                                await createNotification(r._id, 'new_task', 'Документ очікує на підпис', `Документ ${doc.regNumber} (${doc.title}) очікує на ваш підпис`, doc._id);
+                            }
+
+                            // Notify creator
+                            await createNotification(doc.creator, 'status_change', 'Документ погоджено', `Ваш документ ${doc.regNumber} було погоджено та передано на підписання`, doc._id);
+                        } catch (notifErr) {
+                            console.error('Failed to send notifications in bulk approve:', notifErr);
+                        }
+
+                        results.success++;
+                        break;
+
+                    case 'sign':
+                        if (req.user.role !== 'signatory') {
+                            results.failed++;
+                            results.errors.push({ id: docId, error: 'Тільки підписанти можуть підписувати документи' });
+                            continue;
+                        }
+                        if (doc.status !== 'on_signing') {
+                            results.failed++;
+                            results.errors.push({ id: docId, error: 'Документ має бути на підписанні' });
+                            continue;
+                        }
+
+                        let isSignDelegated = false;
+                        let signDelegatorName = '';
+                        if (doc.department !== req.user.department) {
+                            const delegation = await Delegation.findOne({
+                                delegate: req.user._id, department: doc.department, role: 'signatory',
+                                isActive: true, dateFrom: { $lte: new Date() }, dateTo: { $gte: new Date() }
+                            }).populate('delegator', 'fullName');
+                            if (!delegation) {
+                                results.failed++;
+                                results.errors.push({ id: docId, error: 'Ви можете підписувати документи лише свого відділу' });
+                                continue;
+                            }
+                            isSignDelegated = true;
+                            signDelegatorName = delegation.delegator ? delegation.delegator.fullName : 'підписанта';
+                        }
+
+                        doc.status = 'signed';
+                        doc.signatory = req.user._id;
+                        await doc.save();
+
+                        await logSystemAction(req.user, 'Призначення документа', 'Архів / Система', `Документ ${doc.regNumber} (${doc.title}) успішно підписано КЕП масово з реєстру`);
+
+                        let signAuditComment = 'Накладено КЕП масово з реєстру.';
+                        if (isSignDelegated) {
+                            signAuditComment += ` (за делегуванням від ${signDelegatorName})`;
+                        }
+                        await createAuditLog(doc._id, req.user._id, 'status_change', { 
+                            fromStatus: 'on_signing', 
+                            toStatus: 'signed', 
+                            comment: signAuditComment 
+                        });
+
+                        // Notifications / emails
+                        try {
+                            const docUrl = `${req.protocol}://${req.get('host')}/pages/document.html?id=${doc._id}`;
+                            const docWithPopulated = await Document.findById(doc._id).populate('creator', 'email notifications fullName _id').populate('approver', 'email notifications fullName _id');
+                            
+                            if (docWithPopulated.creator && docWithPopulated.creator.email && docWithPopulated.creator.notifications?.onStatusChange !== false) {
+                                await sendSystemEmail(docWithPopulated.creator.email, 'Документ успішно підписано', `Ваш документ <b>${doc.title}</b> (${doc.regNumber}) було успешно підписано.<br><br><a href="${docUrl}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Переглянути документ</a>`);
+                            }
+                            if (docWithPopulated.approver && docWithPopulated.approver.email && docWithPopulated.approver.notifications?.onStatusChange !== false) {
+                                await sendSystemEmail(docWithPopulated.approver.email, 'Документ успішно підписано', `Документ <b>${doc.title}</b> (${doc.regNumber}), який ви погодили, було успішно підписано КЕП. Тепер ви можете перемістити його до архіву.<br><br><a href="${docUrl}" style="display: inline-block; padding: 10px 20px; background-color: #4f46e5; color: white; text-decoration: none; border-radius: 5px;">Переглянути документ</a>`);
+                            }
+
+                            if (docWithPopulated.creator) {
+                                await createNotification(docWithPopulated.creator._id, 'status_change', 'Документ підписано', `Ваш документ ${doc.regNumber} успішно підписано КЕП`, doc._id);
+                            }
+                            if (docWithPopulated.approver) {
+                                await createNotification(docWithPopulated.approver._id, 'status_change', 'Документ підписано', `Документ ${doc.regNumber} (${doc.title}), який ви погодили, було підписано КЕП`, doc._id);
+                            }
+                        } catch (notifErr) {
+                            console.error('Failed to send notifications in bulk sign:', notifErr);
+                        }
+
+                        results.success++;
+                        break;
+
                     case 'delete':
                         const hasDeleteAccess = await checkDraftEditAccess(doc, req.user);
                         if (!hasDeleteAccess && req.user.role !== 'admin') {
@@ -1003,6 +1170,41 @@ const bulkAction = async (req, res) => {
                         doc.isDeleted = true;
                         await doc.save();
                         await createAuditLog(doc._id, req.user._id, 'delete');
+                        results.success++;
+                        break;
+
+                    case 'restore':
+                        if (req.user.role !== 'admin' && doc.creator.toString() !== req.user._id.toString()) {
+                            results.failed++;
+                            results.errors.push({ id: docId, error: 'Access denied' });
+                            continue;
+                        }
+                        doc.isDeleted = false;
+                        await doc.save();
+                        await createAuditLog(doc._id, req.user._id, 'update', { comment: 'Відновлено з кошика' });
+                        results.success++;
+                        break;
+
+                    case 'hardDelete':
+                        if (req.user.role !== 'admin') {
+                            results.failed++;
+                            results.errors.push({ id: docId, error: 'Тільки адміністратор може остаточно видаляти документи' });
+                            continue;
+                        }
+                        const fs = require('fs');
+                        if (doc.files) {
+                            for (const file of doc.files) {
+                                const filePath = path.join(__dirname, '..', file.path);
+                                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+                            }
+                        }
+                        if (doc.fileVersions) {
+                            for (const fv of doc.fileVersions) {
+                                const filePath = path.join(__dirname, '..', fv.path);
+                                if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+                            }
+                        }
+                        await Document.deleteOne({ _id: doc._id });
                         results.success++;
                         break;
 
@@ -1024,7 +1226,7 @@ const bulkAction = async (req, res) => {
 const getDocumentAudit = async (req, res) => {
     try {
         const doc = await Document.findById(req.params.id);
-        if (!doc || doc.isDeleted) return res.status(404).json({ message: 'Not found' });
+        if (!doc) return res.status(404).json({ message: 'Not found' });
 
         const hasAccess = await checkDraftEditAccess(doc, req.user);
         if (req.user.role === 'employee' && !hasAccess) {
@@ -1250,6 +1452,61 @@ const viewOfficeFile = async (req, res) => {
     }
 };
 
+const restoreDocument = async (req, res) => {
+  try {
+    const doc = await Document.findById(req.params.id);
+    if (!doc || !doc.isDeleted) return res.status(404).json({ message: 'Document not found or not deleted' });
+    
+    // Only creator or admin can restore
+    if (req.user.role !== 'admin' && doc.creator._id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Access denied' });
+    }
+
+    doc.isDeleted = false;
+    await doc.save();
+    await createAuditLog(doc._id, req.user._id, 'update', { comment: 'Відновлено з кошика' });
+    res.json(doc);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const hardDeleteDocument = async (req, res) => {
+  try {
+    const doc = await Document.findById(req.params.id);
+    if (!doc || !doc.isDeleted) return res.status(404).json({ message: 'Document not found or not deleted' });
+
+    // Only admin can hard delete
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ message: 'Тільки адміністратор може остаточно видаляти документи' });
+    }
+
+    // Unlink files
+    const fs = require('fs');
+    if (doc.files) {
+        for (const file of doc.files) {
+            const filePath = path.join(__dirname, '..', file.path);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        }
+    }
+    if (doc.fileVersions) {
+        for (const fv of doc.fileVersions) {
+            const filePath = path.join(__dirname, '..', fv.path);
+            if (fs.existsSync(filePath)) {
+                fs.unlinkSync(filePath);
+            }
+        }
+    }
+
+    await Document.deleteOne({ _id: doc._id });
+    res.json({ message: 'Document permanently deleted' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   downloadFile,
   viewOfficeFile,
@@ -1270,5 +1527,7 @@ module.exports = {
   replaceFile,
   linkRelatedDocument,
   unlinkRelatedDocument,
-  bulkAction
+  bulkAction,
+  restoreDocument,
+  hardDeleteDocument
 };

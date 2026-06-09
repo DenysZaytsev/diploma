@@ -9,6 +9,7 @@ import {
   Loader2, 
   UserCheck
 } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 
 interface Delegation {
   _id: string;
@@ -35,6 +36,8 @@ const Delegations: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [reason, setReason] = useState('');
+  
+  const [confirmModal, setConfirmModal] = useState<{isOpen: boolean; id: string | null}>({isOpen: false, id: null});
 
   const fetchDelegations = async () => {
     try {
@@ -98,8 +101,8 @@ const Delegations: React.FC = () => {
       return;
     }
 
-    if (toDate <= fromDate) {
-      setError('Дата закінчення має бути після дати початку');
+    if (toDate < fromDate) {
+      setError('Дата закінчення не може бути раніше дати початку');
       setSubmitLoading(false);
       return;
     }
@@ -122,14 +125,17 @@ const Delegations: React.FC = () => {
     }
   };
 
-  const handleCancel = async (id: string) => {
-    if (confirm('Ви впевнені, що хочете скасувати це делегування?')) {
-      try {
-        await API.delete(`/delegations/${id}`);
-        await fetchDelegations();
-      } catch (err: any) {
-        alert(err.message || 'Не вдалося скасувати делегування');
-      }
+  const handleCancel = (id: string) => {
+    setConfirmModal({ isOpen: true, id });
+  };
+
+  const executeCancel = async () => {
+    if (!confirmModal.id) return;
+    try {
+      await API.delete(`/delegations/${confirmModal.id}`);
+      await fetchDelegations();
+    } catch (err: any) {
+      alert(err.message || 'Не вдалося скасувати делегування');
     }
   };
 
@@ -197,12 +203,11 @@ const Delegations: React.FC = () => {
                     required
                     value={dateFrom}
                     min={new Date().toISOString().split('T')[0]}
-                    max={dateTo || undefined}
                     onChange={(e) => {
                       const val = e.target.value;
                       setDateFrom(val);
                       if (dateTo && val > dateTo) {
-                        setDateTo(val);
+                        setDateTo('');
                       }
                     }}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm bg-white text-slate-800"
@@ -219,7 +224,7 @@ const Delegations: React.FC = () => {
                       const val = e.target.value;
                       setDateTo(val);
                       if (dateFrom && val < dateFrom) {
-                        setDateFrom(val);
+                        setDateFrom('');
                       }
                     }}
                     className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-sm bg-white text-slate-800"
@@ -322,6 +327,13 @@ const Delegations: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal({ isOpen: false, id: null })}
+        onConfirm={executeCancel}
+        message="Ви впевнені, що хочете скасувати це делегування?"
+      />
     </div>
   );
 };

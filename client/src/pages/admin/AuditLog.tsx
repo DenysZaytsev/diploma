@@ -9,6 +9,7 @@ import {
   ArrowUpDown
 } from 'lucide-react';
 import Pagination from '../../components/Pagination';
+import ConfirmModal from '../../components/ConfirmModal';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -37,9 +38,14 @@ const AuditLog: React.FC = () => {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
+
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    message: string;
+    action: () => Promise<void> | void;
+  }>({ isOpen: false, message: '', action: () => {} });
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -92,15 +98,19 @@ const AuditLog: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleClearRequest = async () => {
-    if (confirm('Ви впевнені, що хочете очистити аудит лог? Буде надіслано запит на підтвердження.')) {
-      try {
-        await API.post('/users/system/audit/clear-request', {});
-        alert('Запит надіслано! Перевірте електронну пошту для підтвердження.');
-      } catch (e: any) {
-        alert(e.message || 'Помилка надсилання запиту');
+  const handleClearRequest = () => {
+    setConfirmModal({
+      isOpen: true,
+      message: 'Ви впевнені, що хочете очистити аудит лог? Буде надіслано запит на підтвердження.',
+      action: async () => {
+        try {
+          await API.post('/users/system/audit/clear-request', {});
+          alert('Запит надіслано! Перевірте електронну пошту для підтвердження.');
+        } catch (e: any) {
+          alert(e.message || 'Помилка надсилання запиту');
+        }
       }
-    }
+    });
   };
 
   return (
@@ -266,6 +276,13 @@ const AuditLog: React.FC = () => {
           onPageChange={setCurrentPage}
         />
       </div>
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.action}
+        message={confirmModal.message}
+      />
     </div>
   );
 };

@@ -14,6 +14,7 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 import { 
   translateStatus, 
   translateDirection 
@@ -49,7 +50,13 @@ const Registry: React.FC = () => {
   const [types, setTypes] = useState<{name: string, code: string}[]>([]);
   const [selectedDocs, setSelectedDocs] = useState<string[]>([]);
   const [bulkLoading, setBulkLoading] = useState(false);
-  const [bulkResult, setBulkResult] = useState<null | { succeeded: string[]; failed: { id: string; reason: string }[] }>(null);
+  const [bulkResult, setBulkResult] = useState<null | { success?: number; errors?: { id: string; error?: string; reason?: string }[] }>(null);
+  const [bulkActionType, setBulkActionType] = useState<string | null>(null);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    message: string;
+    action: () => Promise<void> | void;
+  }>({ isOpen: false, message: '', action: () => {} });
   const [isResultModalOpen, setResultModalOpen] = useState(false);
   const [sortField, setSortField] = useState<string>('createdAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -63,21 +70,49 @@ const Registry: React.FC = () => {
     }
   };
 
-  const handleBulkSubmit = async () => {
-    if (!confirm(`Надіслати на погодження ${selectedDocs.length} документів?`)) return;
-    setBulkLoading(true);
-    try {
-      const result = await API.post('/documents/bulk', { documentIds: selectedDocs, action: 'submit' });
-      // Expected result shape { succeeded: [], failed: [{id, reason}] }
-      setBulkResult(result as { succeeded: string[]; failed: { id: string; reason: string; }[] });
-      setResultModalOpen(true);
-      setSelectedDocs([]);
-      await fetchDocuments();
-    } catch (e: any) {
-      alert(e.message || 'Помилка масової подачі');
-    } finally {
-      setBulkLoading(false);
+  const handleBulkAction = async (action: 'submit' | 'approve' | 'sign' | 'delete' | 'restore' | 'hardDelete') => {
+    let confirmMsg = '';
+    let errorMsg = '';
+    
+    if (action === 'submit') {
+      confirmMsg = `Надіслати на погодження ${selectedDocs.length} документів?`;
+      errorMsg = 'Помилка масової подачі';
+    } else if (action === 'approve') {
+      confirmMsg = `Погодити масово ${selectedDocs.length} документів?`;
+      errorMsg = 'Помилка масового погодження';
+    } else if (action === 'sign') {
+      confirmMsg = `Підписати КЕП масово ${selectedDocs.length} документів?`;
+      errorMsg = 'Помилка масового підписання';
+    } else if (action === 'delete') {
+      confirmMsg = `Ви впевнені, що хочете видалити ${selectedDocs.length} документів?`;
+      errorMsg = 'Помилка масового видалення';
+    } else if (action === 'restore') {
+      confirmMsg = `Відновити ${selectedDocs.length} документів з кошика?`;
+      errorMsg = 'Помилка відновлення документів';
+    } else if (action === 'hardDelete') {
+      confirmMsg = `УВАГА! Ви впевнені, що хочете назавжди знищити ${selectedDocs.length} документів? Їх файли також будуть видалені!`;
+      errorMsg = 'Помилка остаточного видалення';
     }
+
+    setConfirmModal({
+      isOpen: true,
+      message: confirmMsg,
+      action: async () => {
+        setBulkLoading(true);
+        setBulkActionType(action);
+        try {
+          const result = await API.post('/documents/bulk', { documentIds: selectedDocs, action });
+          setBulkResult(result as any);
+          setResultModalOpen(true);
+          setSelectedDocs([]);
+          await fetchDocuments();
+        } catch (e: any) {
+          alert(e.message || errorMsg);
+        } finally {
+          setBulkLoading(false);
+        }
+      }
+    });
   };
 
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -296,7 +331,6 @@ const Registry: React.FC = () => {
         </div>
       </div>
 
-      {/* Filters Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex-1 min-w-[240px] relative">
@@ -351,6 +385,18 @@ const Registry: React.FC = () => {
             </>
           )}
 
+          {currentUser?.role === 'admin' && (
+            <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer select-none px-3 py-2 bg-red-50 border border-red-200 rounded-xl hover:bg-red-100/70 transition-all text-red-700">
+              <input 
+                type="checkbox"
+                checked={searchParams.get('isDeleted') === 'true'}
+                onChange={(e) => updateFilter('isDeleted', e.target.checked ? 'true' : 'false')}
+                className="rounded border-red-300 text-red-600 focus:ring-red-500 cursor-pointer w-4 h-4"
+              />
+              Кошик (видалені)
+            </label>
+          )}
+
           <button 
             onClick={resetFilters}
             className="p-2 bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 transition-all flex items-center justify-center"
@@ -361,46 +407,93 @@ const Registry: React.FC = () => {
         </div>
       </div>
 
-      {/* Bulk Operations Panel */}
       {selectedDocs.length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in duration-200">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-blue-800">Вибрано документів: {selectedDocs.length}</span>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleBulkSubmit}
-              disabled={bulkLoading || selectedDocs.some(id => {
-                const doc = documents.find(d => d._id === id);
-                return !doc || !['draft', 'rejected'].includes(doc.status);
-              })}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
-            >
-              Подати на погодження
-            </button>
-            <button
-              onClick={async () => {
-                if (confirm(`Ви впевнені, що хочете видалити ${selectedDocs.length} документів?`)) {
-                  setBulkLoading(true);
-                  try {
-                    await API.post('/documents/bulk', { documentIds: selectedDocs, action: 'delete' });
-                    setSelectedDocs([]);
-                    await fetchDocuments();
-                  } catch (e: any) {
-                    alert(e.message || 'Помилка масового видалення');
-                  } finally {
-                    setBulkLoading(false);
-                  }
-                }
-              }}
-              disabled={bulkLoading || selectedDocs.some(id => {
-                const doc = documents.find(d => d._id === id);
-                return !doc || doc.status !== 'draft';
-              })}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
-            >
-              Видалити
-            </button>
+            {/* Submit Action */}
+            {selectedDocs.length > 0 && selectedDocs.every(id => {
+              const doc = documents.find(d => d._id === id);
+              return doc && ['draft', 'rejected'].includes(doc.status) && (doc.creator?._id === currentUser?._id || currentUser?.role === 'admin');
+            }) && (
+              <button
+                onClick={() => handleBulkAction('submit')}
+                disabled={bulkLoading}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Подати на погодження
+              </button>
+            )}
+
+            {/* Approve Action */}
+            {selectedDocs.length > 0 && selectedDocs.every(id => {
+              const doc = documents.find(d => d._id === id);
+              return doc && doc.status === 'on_approval' && (currentUser?.role === 'approver' || currentUser?.role === 'admin');
+            }) && (
+              <button
+                onClick={() => handleBulkAction('approve')}
+                disabled={bulkLoading}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Погодити вибрані
+              </button>
+            )}
+
+            {/* Sign Action */}
+            {selectedDocs.length > 0 && selectedDocs.every(id => {
+              const doc = documents.find(d => d._id === id);
+              return doc && doc.status === 'on_signing' && (currentUser?.role === 'signatory' || currentUser?.role === 'admin');
+            }) && (
+              <button
+                onClick={() => handleBulkAction('sign')}
+                disabled={bulkLoading}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Підписати вибрані
+              </button>
+            )}
+
+            {/* Delete Action */}
+            {selectedDocs.length > 0 && selectedDocs.every(id => {
+              const doc = documents.find(d => d._id === id);
+              return doc && (
+                (doc.status === 'draft' && doc.creator?._id === currentUser?._id) || 
+                currentUser?.role === 'admin'
+              );
+            }) && (
+              <button
+                onClick={() => handleBulkAction('delete')}
+                disabled={bulkLoading}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Видалити
+              </button>
+            )}
+
+            {/* Restore Action */}
+            {searchParams.get('isDeleted') === 'true' && currentUser?.role === 'admin' && (
+              <button
+                onClick={() => handleBulkAction('restore')}
+                disabled={bulkLoading}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Відновити
+              </button>
+            )}
+
+            {/* Hard Delete Action */}
+            {searchParams.get('isDeleted') === 'true' && currentUser?.role === 'admin' && (
+              <button
+                onClick={() => handleBulkAction('hardDelete')}
+                disabled={bulkLoading}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
+              >
+                Видалити
+              </button>
+            )}
+
             <button
               onClick={() => setSelectedDocs([])}
               className="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition-all"
@@ -411,7 +504,6 @@ const Registry: React.FC = () => {
         </div>
       )}
 
-      {/* Table Section */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -607,9 +699,14 @@ const Registry: React.FC = () => {
                            onClick={(e) => {
                              e.preventDefault();
                              e.stopPropagation();
-                             if (confirm('Ви впевнені, що хочете видалити цей документ?')) {
-                               API.delete(`/documents/${doc._id}`).then(() => fetchDocuments());
-                             }
+                             setConfirmModal({
+                               isOpen: true,
+                               message: 'Ви впевнені, що хочете видалити цей документ?',
+                               action: async () => {
+                                 await API.delete(`/documents/${doc._id}`);
+                                 await fetchDocuments();
+                               }
+                             });
                            }}
                            className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-lg transition-all"
                            title="Видалити документ"
@@ -626,7 +723,6 @@ const Registry: React.FC = () => {
           </table>
         </div>
         
-        {/* Pagination placeholder */}
         <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-200 flex items-center justify-between">
            <p className="text-xs font-medium text-slate-500 tracking-wide">
              Показано {documents.length} документів
@@ -641,34 +737,63 @@ const Registry: React.FC = () => {
            </div>
         </div>
       </div>
-    {isResultModalOpen && bulkResult && (
+      
+      {isResultModalOpen && bulkResult && (
         <Modal
           isOpen={isResultModalOpen}
           onClose={() => setResultModalOpen(false)}
-          title="Результат подачі"
+          title={
+            bulkActionType === 'submit' ? "Результат подачі на погодження" :
+            bulkActionType === 'approve' ? "Результат погодження" :
+            bulkActionType === 'sign' ? "Результат підписання" :
+            bulkActionType === 'delete' ? "Результат видалення" : "Результат операції"
+          }
           size="md"
           footer={(
             <button
               onClick={() => setResultModalOpen(false)}
-              className="px-4 py-2 bg-blue-600 text-white rounded"
+              className="px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors"
             >
               Закрити
             </button>
           )}
         >
-          <p>Успішно подано: {bulkResult.succeeded.length}</p>
-          {bulkResult.failed.length > 0 && (
-            <div className="mt-2">
-              <p className="font-semibold">Не успішно:</p>
-              <ul className="list-disc pl-5 space-y-1">
-                {bulkResult.failed.map(f => (
-                  <li key={f.id}>{f.id}: {f.reason}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <div className="space-y-4">
+            <p className="text-sm font-semibold text-slate-700">
+              {
+                bulkActionType === 'submit' ? `Успішно подано: ${bulkResult.success || 0}` :
+                bulkActionType === 'approve' ? `Успішно погоджено: ${bulkResult.success || 0}` :
+                bulkActionType === 'sign' ? `Успішно підписано: ${bulkResult.success || 0}` :
+                bulkActionType === 'delete' ? `Успішно видалено: ${bulkResult.success || 0}` : `Успішно опрацьовано: ${bulkResult.success || 0}`
+              }
+            </p>
+            {bulkResult.errors && bulkResult.errors.length > 0 && (
+              <div className="mt-2 border-t border-slate-100 pt-3">
+                <p className="font-bold text-sm text-red-600 mb-2">Не успішно ({bulkResult.errors.length}):</p>
+                <ul className="list-disc pl-5 space-y-2 max-h-60 overflow-y-auto">
+                  {bulkResult.errors.map(f => {
+                    const doc = documents.find(d => d._id === f.id);
+                    const docName = doc ? `${doc.regNumber} (${doc.title})` : f.id;
+                    const errorReason = f.error || f.reason || 'Невідома помилка';
+                    return (
+                      <li key={f.id} className="text-xs text-slate-600">
+                        <span className="font-semibold text-slate-800">{docName}</span>: <span className="text-red-500">{errorReason}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
         </Modal>
       )}
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.action}
+        message={confirmModal.message}
+      />
     </div>
   );
 };

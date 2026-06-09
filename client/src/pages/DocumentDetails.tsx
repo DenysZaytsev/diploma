@@ -17,10 +17,11 @@ import {
   Loader2,
   Trash2,
   X,
-  Plus,
   Upload,
-  Edit
+  Edit,
+  Plus
 } from 'lucide-react';
+import ConfirmModal from '../components/ConfirmModal';
 import { 
   translateStatus, 
   translateDirection, 
@@ -59,6 +60,8 @@ interface DocumentDetails {
   direction: string;
   dueDate?: string;
   createdAt: string;
+  updatedAt: string;
+  isDeleted: boolean;
   filePath: string;
   creator: { _id: string; fullName: string; role: string; department?: string };
   approver?: { _id: string; fullName: string; role: string; department?: string };
@@ -99,6 +102,12 @@ const DocumentDetails: React.FC = () => {
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    message: string;
+    action: () => Promise<void> | void;
+  }>({ isOpen: false, message: '', action: () => {} });
   const [rejectError, setRejectError] = useState<string | null>(null);
   const [availableDocs, setAvailableDocs] = useState<any[]>([]);
   const [linkSearchQuery, setLinkSearchQuery] = useState('');
@@ -187,7 +196,6 @@ const DocumentDetails: React.FC = () => {
   );
 
   const canViewFiles = currentUser?.role !== 'admin';
-  const canDelete = currentUser?.role === 'admin' || (currentUser?.role === 'employee' && doc.status === 'draft');
 
   const statusColors: Record<string, string> = {
     'draft': 'bg-slate-100 text-slate-600 border-slate-200',
@@ -309,11 +317,14 @@ const DocumentDetails: React.FC = () => {
 
       {/* Action Bar (only visible if actions are available) */}
       {(isEditing || 
-        (doc.status === 'draft' && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin')) ||
-        (doc.status === 'rejected' && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin')) ||
-        (doc.status === 'on_approval' && (currentUser?.role === 'approver' || currentUser?.role === 'admin')) ||
-        (doc.status === 'on_signing' && (currentUser?.role === 'signatory' || currentUser?.role === 'admin')) ||
-        (doc.status === 'signed' && currentUser?.role === 'approver')
+        (doc.isDeleted && currentUser?.role === 'admin') ||
+        (!doc.isDeleted && (
+          (doc.status === 'draft' && (doc.creator._id === currentUser?._id || isDelegate)) ||
+          (doc.status === 'rejected' && (doc.creator._id === currentUser?._id || isDelegate)) ||
+          (doc.status === 'on_approval' && (currentUser?.role === 'approver')) ||
+          (doc.status === 'on_signing' && (currentUser?.role === 'signatory')) ||
+          (doc.status === 'signed' && currentUser?.role === 'approver')
+        ))
       ) && (
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
@@ -331,7 +342,8 @@ const DocumentDetails: React.FC = () => {
                      try {
                        await API.patch(`/documents/${doc._id}`, {
                          title: editTitle,
-                         description: editDescription
+                         description: editDescription,
+                         updatedAt: doc.updatedAt
                        });
                        setIsEditing(false);
                        await fetchDetails();
@@ -357,7 +369,7 @@ const DocumentDetails: React.FC = () => {
              )}
 
              {/* Draft & Rejected Actions */}
-             {!isEditing && ['draft', 'rejected'].includes(doc.status) && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin') && (
+             {!isEditing && !doc.isDeleted && ['draft', 'rejected'].includes(doc.status) && (doc.creator._id === currentUser?._id || isDelegate) && (
                <>
                  <button 
                    onClick={handleStartEdit}
@@ -385,26 +397,72 @@ const DocumentDetails: React.FC = () => {
                    {actionLoading === 'submit' ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />}
                    Відправити на погодження
                  </button>
-                 {canDelete && (
-                   <button 
-                     onClick={() => {
-                       if (confirm('Ви впевнені, що хочете видалити цей документ?')) {
-                         API.delete(`/documents/${doc._id}`)
-                           .then(() => navigate('/registry'))
-                           .catch(err => alert(err.message));
+               </>
+             )}
+
+             {/* Soft Delete Action */}
+             {!isEditing && !doc.isDeleted && (currentUser?.role === 'employee' && doc.status === 'draft' && (doc.creator._id === currentUser?._id || isDelegate)) && (
+               <button 
+                 onClick={() => {
+                   setConfirmModal({
+                     isOpen: true,
+                     message: 'Ви впевнені, що хочете видалити цей документ?',
+                     action: async () => {
+                       await API.delete(`/documents/${doc._id}`);
+                       navigate('/registry');
+                     }
+                   });
+                 }}
+                 className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                 title="Видалити документ"
+               >
+                 <Trash2 size={20} />
+               </button>
+             )}
+
+             {/* Deleted Documents Actions */}
+             {!isEditing && doc.isDeleted && currentUser?.role === 'admin' && (
+               <>
+                 <button 
+                   onClick={async () => {
+                     setActionLoading('restore');
+                     try {
+                       await API.post(`/documents/${doc._id}/restore`, {});
+                       await fetchDetails();
+                     } catch (err: any) {
+                       alert(err.message || 'Помилка відновлення');
+                     } finally {
+                       setActionLoading(null);
+                     }
+                   }}
+                   disabled={!!actionLoading}
+                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-600/20 transition-all flex items-center gap-2"
+                 >
+                   {actionLoading === 'restore' ? <Loader2 className="animate-spin" size={16} /> : <History size={16} />}
+                   Відновити з кошика
+                 </button>
+                 <button 
+                   onClick={() => {
+                     setConfirmModal({
+                       isOpen: true,
+                       message: 'Остаточне видалення назавжди знищить документ та всі його файли. Продовжити?',
+                       action: async () => {
+                         await API.delete(`/documents/${doc._id}/hard`);
+                         navigate('/registry');
                        }
-                     }}
-                     className="p-2.5 text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                     title="Видалити документ"
-                   >
-                     <Trash2 size={20} />
-                   </button>
-                 )}
+                     });
+                   }}
+                   disabled={!!actionLoading}
+                   className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-red-600/20 transition-all flex items-center gap-2"
+                 >
+                   <Trash2 size={16} />
+                   Видалити назавжди
+                 </button>
                </>
              )}
 
              {/* Approval Actions */}
-             {!isEditing && doc.status === 'on_approval' && (currentUser?.role === 'approver') && (
+             {!isEditing && !doc.isDeleted && doc.status === 'on_approval' && (currentUser?.role === 'approver') && (
                <>
                  <button 
                    onClick={() => {
@@ -436,7 +494,7 @@ const DocumentDetails: React.FC = () => {
              )}
 
              {/* Signing Actions */}
-             {!isEditing && doc.status === 'on_signing' && (currentUser?.role === 'signatory') && (
+             {!isEditing && !doc.isDeleted && doc.status === 'on_signing' && (currentUser?.role === 'signatory') && (
                <>
                  <button 
                    onClick={() => {
@@ -466,7 +524,7 @@ const DocumentDetails: React.FC = () => {
                  </button>
                </>
              )}
-             {!isEditing && doc.status === 'signed' && currentUser?.role === 'approver' && (
+             {!isEditing && !doc.isDeleted && doc.status === 'signed' && currentUser?.role === 'approver' && (
                <button 
                  onClick={() => {
                    setActionLoading('archive');
@@ -612,14 +670,14 @@ const DocumentDetails: React.FC = () => {
                                         </label>
                                         <button 
                                           onClick={async () => {
-                                            if (confirm(`Ви впевнені, що хочете видалити файл "${f.originalName}"?`)) {
-                                              try {
+                                            setConfirmModal({
+                                              isOpen: true,
+                                              message: `Ви впевнені, що хочете видалити файл "${f.originalName}"?`,
+                                              action: async () => {
                                                 await API.delete(`/documents/${doc._id}/files/${f._id}`);
                                                 await fetchDetails();
-                                              } catch (e: any) {
-                                                alert(e.message || 'Не вдалося видалити файл');
                                               }
-                                            }
+                                            });
                                           }}
                                           className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all"
                                           title="Видалити файл"
@@ -708,17 +766,16 @@ const DocumentDetails: React.FC = () => {
                             {['draft', 'rejected'].includes(doc.status) && (doc.creator._id === currentUser?._id || isDelegate || currentUser?.role === 'admin') && (
                                 <button 
                                 onClick={async () => {
-                                    if (confirm(`Ви впевнені, що хочете розірвати зв'язок з документом "${rd.regNumber}"?`)) {
-                                    try {
+                                    setConfirmModal({
+                                      isOpen: true,
+                                      message: `Ви впевнені, що хочете розірвати зв'язок з документом "${rd.regNumber}"?`,
+                                      action: async () => {
                                         setActionLoading('unlink');
                                         await API.delete(`/documents/${doc._id}/related/${rd._id}`);
                                         await fetchDetails();
-                                    } catch (err: any) {
-                                        alert(err.message || 'Не вдалося розірвати зв\'язок');
-                                    } finally {
                                         setActionLoading(null);
-                                    }
-                                    }
+                                      }
+                                    });
                                 }}
                                 className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded-xl transition-all shrink-0"
                                 title="Розірвати зв'язок"
@@ -1167,6 +1224,13 @@ const DocumentDetails: React.FC = () => {
           )}
         </div>
       </Modal>
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.action}
+        message={confirmModal.message}
+      />
     </div>
   );
 };

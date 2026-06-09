@@ -38,8 +38,8 @@ router.post('/', protect, authorize('approver', 'signatory', 'employee'), async 
             return res.status(400).json({ message: 'Дата початку не може бути в минулому' });
         }
 
-        if (toDate <= fromDate) {
-            return res.status(400).json({ message: 'Дата закінчення має бути після дати початку' });
+        if (toDate < fromDate) {
+            return res.status(400).json({ message: 'Дата закінчення не може бути раніше дати початку' });
         }
 
         const delegate = await User.findById(delegateId);

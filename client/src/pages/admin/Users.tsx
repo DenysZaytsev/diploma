@@ -19,6 +19,7 @@ import {
 import UserModal from '../../components/admin/UserModal';
 import type { User } from '../../components/admin/UserModal';
 import PasswordModal from '../../components/admin/PasswordModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -42,6 +43,12 @@ const Users: React.FC = () => {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isPwdModalOpen, setIsPwdModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    message: string;
+    action: () => Promise<void> | void;
+  }>({ isOpen: false, message: '', action: () => {} });
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -100,23 +107,31 @@ const Users: React.FC = () => {
     }
   };
 
-  const handleToggleBlock = async (user: User) => {
+  const handleToggleBlock = (user: User) => {
     const action = user.isBlocked ? 'розблокувати' : 'заблокувати';
-    if (confirm(`Ви впевнені, що хочете ${action} користувача ${user.fullName}?`)) {
-      await API.patch(`/users/${user._id}`, { isBlocked: !user.isBlocked });
-      await fetchData();
-    }
+    setConfirmModal({
+      isOpen: true,
+      message: `Ви впевнені, що хочете ${action} користувача ${user.fullName}?`,
+      action: async () => {
+        await API.patch(`/users/${user._id}`, { isBlocked: !user.isBlocked });
+        await fetchData();
+      }
+    });
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (confirm(`Ви впевнені, що хочете видалити користувача "${name}"? Ця дія незворотня.`)) {
-      try {
-        await API.delete(`/users/${id}`);
-        await fetchData();
-      } catch (e: any) {
-        alert(e.message || 'Помилка видалення');
+  const handleDelete = (id: string, name: string) => {
+    setConfirmModal({
+      isOpen: true,
+      message: `Ви впевнені, що хочете видалити користувача "${name}"? Ця дія незворотня.`,
+      action: async () => {
+        try {
+          await API.delete(`/users/${id}`);
+          await fetchData();
+        } catch (e: any) {
+          alert(e.message || 'Помилка видалення');
+        }
       }
-    }
+    });
   };
 
   const openAddModal = () => {
@@ -398,6 +413,13 @@ const Users: React.FC = () => {
         onClose={() => setIsPwdModalOpen(false)}
         onSave={handleUpdatePassword}
         userName={selectedUser?.fullName || ''}
+      />
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.action}
+        message={confirmModal.message}
       />
     </div>
   );

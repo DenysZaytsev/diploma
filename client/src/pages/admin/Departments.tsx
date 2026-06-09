@@ -10,6 +10,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import DepartmentModal from '../../components/admin/DepartmentModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import Pagination from '../../components/Pagination';
 
 interface Department {
@@ -26,6 +27,12 @@ const Departments: React.FC = () => {
   // Modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDept, setEditingDept] = useState<Department | null>(null);
+  
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    message: string;
+    action: () => Promise<void> | void;
+  }>({ isOpen: false, message: '', action: () => {} });
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,15 +74,19 @@ const Departments: React.FC = () => {
     await fetchDepartments();
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (confirm(`Ви впевнені, що хочете видалити відділ "${name}"?`)) {
-      try {
-        await API.delete(`/departments/${id}`);
-        await fetchDepartments();
-      } catch (e: any) {
-        alert(e.message || 'Помилка видалення');
+  const handleDelete = (id: string, name: string) => {
+    setConfirmModal({
+      isOpen: true,
+      message: `Ви впевнені, що хочете видалити відділ "${name}"?`,
+      action: async () => {
+        try {
+          await API.delete(`/departments/${id}`);
+          await fetchDepartments();
+        } catch (e: any) {
+          alert(e.message || 'Помилка видалення');
+        }
       }
-    }
+    });
   };
 
   const openAddModal = () => {
@@ -206,6 +217,13 @@ const Departments: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         onSave={handleSave}
         department={editingDept}
+      />
+
+      <ConfirmModal 
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.action}
+        message={confirmModal.message}
       />
     </div>
   );

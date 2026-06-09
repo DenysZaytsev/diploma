@@ -20,7 +20,9 @@ const {
   unlinkRelatedDocument,
   bulkAction,
   downloadFile,
-  viewOfficeFile
+  viewOfficeFile,
+  restoreDocument,
+  hardDeleteDocument
 } = require('../controllers/documentController');
 const { protect, authorize } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
@@ -37,6 +39,10 @@ router.route('/:id')
   .get(protect, getDocumentById)
   .patch(protect, authorize('employee'), updateDocument)
   .delete(protect, authorize('employee', 'admin'), deleteDocument);
+
+// Soft delete restore and Hard delete
+router.post('/:id/restore', protect, restoreDocument);
+router.delete('/:id/hard', protect, authorize('admin'), hardDeleteDocument);
 
 // Робота з файлами
 router.get('/:id/files/:filename/download', protect, downloadFile);
