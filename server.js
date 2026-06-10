@@ -29,7 +29,8 @@ if (!fs.existsSync(uploadsDir)) {
 // Middleware
 app.use(helmet({
     contentSecurityPolicy: false, // Вимкнено для inline-скриптів Tailwind CDN
-    crossOriginEmbedderPolicy: false
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: false
 }));
 
 // Always allow local development URLs for debugging

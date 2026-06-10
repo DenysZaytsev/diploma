@@ -22,6 +22,8 @@ const loginUser = async (req, res) => {
         role: user.role,
         department: user.department,
         departments: user.departments || [],
+        avatar: user.avatar,
+        notifications: user.notifications,
         token: generateToken(user._id, user.role),
       });
     } else {
@@ -113,7 +115,21 @@ const updateProfile = async (req, res) => {
       user.fullName = req.body.fullName;
     }
 
-    if (req.file) {
+    if (req.body.deleteAvatar === true || req.body.deleteAvatar === 'true') {
+      if (user.avatar && user.avatar.startsWith('/uploads/')) {
+        const path = require('path');
+        const fs = require('fs');
+        const filePath = path.join(__dirname, '..', user.avatar);
+        if (fs.existsSync(filePath)) {
+          try {
+            fs.unlinkSync(filePath);
+          } catch (err) {
+            console.error('Failed to delete avatar file:', err);
+          }
+        }
+      }
+      user.avatar = null;
+    } else if (req.file) {
       user.avatar = `/uploads/${req.file.filename}`;
     }
 

@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { API } from '../api/client';
-import { User, Building2, Mail, Bell, Upload, Loader2 } from 'lucide-react';
+import { User, Building2, Mail, Bell, Upload, Loader2, Trash2 } from 'lucide-react';
 import { translateRole } from '../utils/translations';
+
+const serverUrl = window.location.port === '5173' ? 'http://localhost:5001' : '';
+const getAvatarUrl = (avatar?: string) => {
+  if (!avatar) return '';
+  return avatar.startsWith('http') ? avatar : `${serverUrl}${avatar}`;
+};
 
 const Profile: React.FC = () => {
   const { user, updateUser } = useAuth();
@@ -44,6 +50,24 @@ const Profile: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       setErrorMsg(err.message || 'Помилка завантаження аватара');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteAvatar = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    setUploading(true);
+    try {
+      const updatedUser = await API.patch<any>('/auth/profile', {
+        deleteAvatar: true,
+      });
+      updateUser(updatedUser);
+      setSuccessMsg('Аватар успішно видалено!');
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || 'Помилка видалення аватара');
     } finally {
       setUploading(false);
     }
@@ -104,7 +128,7 @@ const Profile: React.FC = () => {
             <div className="w-full h-full rounded-full overflow-hidden border-4 border-slate-100 bg-slate-50 flex items-center justify-center">
               {user.avatar ? (
                 <img 
-                  src={user.avatar} 
+                  src={getAvatarUrl(user.avatar)} 
                   alt={user.fullName} 
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -129,6 +153,17 @@ const Profile: React.FC = () => {
               </div>
             )}
           </div>
+
+          {user.avatar && (
+            <button 
+              type="button"
+              onClick={handleDeleteAvatar}
+              className="mb-4 px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <Trash2 size={13} />
+              Видалити фото
+            </button>
+          )}
 
           <h2 className="text-lg font-bold text-slate-900">{user.fullName}</h2>
           <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mt-1">{translateRole(user.role)}</p>

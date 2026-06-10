@@ -21,6 +21,12 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const serverUrl = window.location.port === '5173' ? 'http://localhost:5001' : '';
+const getAvatarUrl = (avatar?: string) => {
+  if (!avatar) return '';
+  return avatar.startsWith('http') ? avatar : `${serverUrl}${avatar}`;
+};
+
 interface SidebarProps {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
@@ -90,7 +96,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
          {!collapsed && (
            <NavLink to="/profile" className="flex items-center gap-3 hover:bg-white/5 p-1.5 rounded-xl transition-all cursor-pointer">
              <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold border border-white/10 overflow-hidden">
-               {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.fullName.charAt(0)}
+               {user.avatar ? <img src={getAvatarUrl(user.avatar)} className="w-full h-full object-cover" /> : user.fullName.charAt(0)}
              </div>
              <div className="flex-1 overflow-hidden">
                <p className="text-sm font-medium truncate">{user.fullName}</p>
@@ -100,7 +106,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
          )}
          {collapsed && (
            <NavLink to="/profile" className="mx-auto w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold border border-white/10 hover:bg-white/5 transition-all cursor-pointer flex">
-             {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover rounded-full" /> : user.fullName.charAt(0)}
+             {user.avatar ? <img src={getAvatarUrl(user.avatar)} className="w-full h-full object-cover rounded-full" /> : user.fullName.charAt(0)}
            </NavLink>
          )}
       </div>
